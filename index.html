@@ -76,7 +76,7 @@
     position:absolute; inset:0; background:rgba(255,255,255,.96); display:flex; flex-direction:column;
     align-items:center; justify-content:center; gap:6px; opacity:0; pointer-events:none; transition:opacity .3s;
   }
-  .ecard .toast.show { opacity:1; }
+  .ecard .toast.show { opacity:1; pointer-events:auto; }
   .ecard .toast .check { width:54px; height:54px; border-radius:50%; background:var(--moss); color:#fff; display:flex; align-items:center; justify-content:center; font-size:28px; }
   .ecard .toast.endt .check { background:var(--wine); }
   .ecard .toast .ttime { font-family:'Cormorant Garamond',serif; font-size:34px; font-weight:600; }
@@ -445,7 +445,6 @@ function renderEmpCards(){
     const card=document.createElement('div');
     card.className='ecard '+(st==='service'?'service':st==='pause'?'pause':'');
     const stateTxt = st==='service'?'En service' : st==='pause'?'En pause' : 'Au repos';
-    const totalToday = todayCompletedNet(e.id) + (st!=='repos'?activeElapsed(e.id):0);
     let btns='';
     if(st==='repos'){
       btns=`<div class="ebtns"><button class="ebtn start" data-act="start" data-id="${e.id}">Commencer</button></div>`;
@@ -459,7 +458,6 @@ function renderEmpCards(){
     card.innerHTML=`
       <div class="ename serif">${e.name}</div>
       <div class="estate">${stateTxt}</div>
-      <div class="etimer tnum serif">${secToHM(totalToday)}</div>
       <div class="esub">${sub}</div>
       ${btns}
       <div class="toast" id="toast-${e.id}"><div class="check">✓</div><div class="ttime tnum serif"></div><div class="tlabel"></div><div class="tsegs"></div></div>`;
@@ -481,8 +479,12 @@ function showToast(empId, timeStr, label, segs, isEnd){
   setTimeout(()=>tt.classList.remove('show'), isEnd?3400:1800);
 }
 
+const cardLock={};
 function punch(empId, act){
+  if(cardLock[empId]) return; // 确认提示期间锁定，防误触
   const now=new Date(); const nowISO=now.toISOString(); const tstr=hms(now);
+  const lockMs = act==='end' ? 3400 : 1800;
+  cardLock[empId]=true; setTimeout(()=>{ cardLock[empId]=false; }, lockMs);
   if(act==='start'){
     DATA.active[empId]={ startTs:nowISO, pauses:[], status:'service' };
     save(); ping(false); renderEmpCards();
@@ -509,8 +511,7 @@ function punch(empId, act){
     DATA.records[dk][empId].shifts.push(sh);
     delete DATA.active[empId];
     save(); ping(true); renderEmpCards();
-    const segTxt = shiftSegments(sh).map(s=>hm(s[0])+'–'+hm(s[1])).join('  /  ');
-    showToast(empId, hm(tstr), 'Fin de service', segTxt, true);
+    showToast(empId, hm(tstr), 'Fin de service', '', true);
   }
 }
 
@@ -519,13 +520,6 @@ function tickClock(){
   const now=new Date(); const L=I18N.fr;
   document.getElementById('live-clock').textContent=pad(now.getHours())+':'+pad(now.getMinutes());
   document.getElementById('live-date').textContent=L.days[now.getDay()]+' '+now.getDate()+' '+L.months[now.getMonth()].toLowerCase();
-  // refresh running timers
-  DATA.employees.forEach(e=>{
-    if(liveState(e.id)!=='repos'){
-      const el=document.querySelectorAll('.ecard')[DATA.employees.indexOf(e)];
-      if(el){ const tm=el.querySelector('.etimer'); if(tm) tm.textContent=secToHM(todayCompletedNet(e.id)+activeElapsed(e.id)); }
-    }
-  });
 }
 
 // ============ INIT ============
