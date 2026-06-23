@@ -210,7 +210,13 @@ const I18N = {
     days:['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'],
     months:['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'],
     backInfo:'La sauvegarde télécharge un fichier .json avec toutes les données et le code de récupération. Gardez-le en lieu sûr.',
-    overrideNote:'Modifie l\'horaire prévu pour CE JOUR uniquement (changement de planning, travail un jour de repos). Le planning hebdomadaire reste inchangé.'
+    overrideNote:'Modifie l\'horaire prévu pour CE JOUR uniquement (changement de planning, travail un jour de repos). Le planning hebdomadaire reste inchangé.',
+    sinceStart:'Depuis le début', fromDate:'À partir du', current:'Actuel', newPeriod:'Nouvelle période',
+    effectiveFrom:'Effectif à partir du', baseVersionNote:'Version de base, utilisée pour toutes les dates antérieures.',
+    confirmDelVersion:'Supprimer cette période de planning ?',
+    backupCode:'Code de sauvegarde', generateCode:'Générer le code', copyCode:'Copier', pasteCode:'Coller le code ici',
+    restoreCode:'Restaurer depuis le code', copied:'Copié ✓', restored:'Données restaurées ✓', invalidCode:'Code invalide',
+    codeInfo:'Génère un texte qui contient toutes les données. Copiez-le et envoyez-le (WhatsApp, etc.) vers un autre appareil, puis collez-le pour restaurer. Aucun fichier à télécharger.'
   },
   en: {
     admin:'Administration', records:'Records', employees:'Employees', settings:'Settings',
@@ -230,7 +236,13 @@ const I18N = {
     days:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
     months:['January','February','March','April','May','June','July','August','September','October','November','December'],
     backInfo:'Backup downloads a .json file with all data and the recovery code. Keep it safe.',
-    overrideNote:'Changes the planned schedule for THIS DAY only (shift change, working a rest day). The weekly schedule stays unchanged.'
+    overrideNote:'Changes the planned schedule for THIS DAY only (shift change, working a rest day). The weekly schedule stays unchanged.',
+    sinceStart:'Since the beginning', fromDate:'From', current:'Current', newPeriod:'New period',
+    effectiveFrom:'Effective from', baseVersionNote:'Base version, used for all earlier dates.',
+    confirmDelVersion:'Delete this schedule period?',
+    backupCode:'Backup code', generateCode:'Generate code', copyCode:'Copy', pasteCode:'Paste the code here',
+    restoreCode:'Restore from code', copied:'Copied ✓', restored:'Data restored ✓', invalidCode:'Invalid code',
+    codeInfo:'Generates a text containing all data. Copy and send it (WhatsApp, etc.) to another device, then paste to restore. No file to download.'
   },
   zh: {
     admin:'后台管理', records:'打卡记录', employees:'员工', settings:'设置',
@@ -250,7 +262,13 @@ const I18N = {
     days:['周日','周一','周二','周三','周四','周五','周六'],
     months:['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'],
     backInfo:'备份会下载一个 .json 文件，包含全部数据和恢复码。请妥善保存。',
-    overrideNote:'只修改“当天”的预定排班（调班、休息日临时上班）。每周排班模板不受影响。'
+    overrideNote:'只修改“当天”的预定排班（调班、休息日临时上班）。每周排班模板不受影响。',
+    sinceStart:'自始生效', fromDate:'起始', current:'当前', newPeriod:'新增一个排班时段',
+    effectiveFrom:'生效起始日', baseVersionNote:'基础版本，用于此日期之前的所有天。',
+    confirmDelVersion:'删除这个排班时段？',
+    backupCode:'备份码', generateCode:'生成备份码', copyCode:'复制', pasteCode:'把备份码粘贴到这里',
+    restoreCode:'用备份码恢复', copied:'已复制 ✓', restored:'数据已恢复 ✓', invalidCode:'备份码无效',
+    codeInfo:'生成一段包含全部数据的文字。复制后用微信等发到另一台设备，粘贴即可恢复。无需下载任何文件。'
   }
 };
 function t(k){ return (I18N[DATA.lang]||I18N.fr)[k]; }
@@ -259,29 +277,74 @@ function t(k){ return (I18N[DATA.lang]||I18N.fr)[k]; }
 const STORE_KEY = 'pointage_data_v1';
 let DATA = null;
 
+// ---- Schedule versions (effective-dated). from:null = depuis le début ----
+const CAMILLE_VERSIONS = [
+  { from:null, schedule:{
+    1:{am:null, pm:['18:00','21:00']},
+    2:{am:null, pm:['18:30','21:00']},
+    3:{am:['11:30','13:00'], pm:['18:00','20:00']},
+    4:null,
+    5:{am:['11:30','13:00'], pm:['18:30','21:30']},
+    6:{am:null, pm:['18:30','21:30']},
+    0:{am:null, pm:['18:00','21:30']}
+  }},
+  { from:'2026-06-15', schedule:{
+    1:{am:null, pm:['18:00','21:00']},
+    2:{am:null, pm:['18:30','21:00']},
+    3:null,
+    4:{am:null, pm:['18:30','21:00']},
+    5:{am:['11:30','13:00'], pm:['18:30','21:30']},
+    6:{am:['12:00','13:00'], pm:['18:30','21:30']},
+    0:{am:null, pm:['18:00','21:30']}
+  }},
+  { from:'2026-06-22', schedule:{
+    1:null,
+    2:{am:['11:30','13:00'], pm:['18:00','20:30']},
+    3:null,
+    4:{am:['11:30','13:00'], pm:['18:00','20:30']},
+    5:{am:['11:30','12:30'], pm:['17:30','21:00']},
+    6:{am:['12:00','13:00'], pm:['18:00','21:00']},
+    0:{am:null, pm:['17:30','21:00']}
+  }}
+];
+const KIM_VERSIONS = [
+  { from:null, schedule:{
+    1:null,
+    2:{am:['11:30','13:00'], pm:['17:30','20:30']},
+    3:{am:null, pm:['19:00','21:00']},
+    4:{am:['11:30','13:00'], pm:['18:00','20:30']},
+    5:{am:null, pm:['17:30','21:00']},
+    6:{am:['12:00','13:00'], pm:['17:30','21:00']},
+    0:{am:null, pm:['17:30','21:00']}
+  }},
+  { from:'2026-06-15', schedule:{
+    1:null,
+    2:{am:['11:30','13:00'], pm:['17:30','20:30']},
+    3:{am:['11:30','13:00'], pm:['18:00','20:00']},
+    4:{am:['11:30','13:00'], pm:['18:00','20:00']},
+    5:{am:null, pm:['17:30','21:00']},
+    6:{am:null, pm:['17:30','21:00']},
+    0:{am:null, pm:['17:30','21:00']}
+  }},
+  { from:'2026-06-22', schedule:{
+    1:null,
+    2:{am:['13:00','13:30'], pm:['17:30','20:30']},
+    3:{am:['11:30','13:00'], pm:['18:00','21:00']},
+    4:{am:['13:00','13:30'], pm:['18:00','20:00']},
+    5:{am:['12:30','13:30'], pm:['17:30','21:00']},
+    6:{am:null, pm:['17:30','21:00']},
+    0:{am:null, pm:['17:30','21:00']}
+  }}
+];
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+
 function defaultData(){
   return {
-    version:1, lang:'fr', password:'2808',
+    version:2, lang:'fr', password:'2808',
     recovery: genRecovery(),
     employees:[
-      { id:'camille', name:'Camille', schedule:{
-        1:{am:null, pm:['18:00','21:00']},
-        2:{am:null, pm:['18:30','21:00']},
-        3:{am:['11:30','13:00'], pm:['18:00','20:00']},
-        4:null,
-        5:{am:['11:30','13:00'], pm:['18:30','21:30']},
-        6:{am:null, pm:['18:30','21:30']},
-        0:{am:null, pm:['18:00','21:30']}
-      }},
-      { id:'kim', name:'Kim', schedule:{
-        1:null,
-        2:{am:['11:30','13:00'], pm:['17:30','20:30']},
-        3:{am:null, pm:['19:00','21:00']},
-        4:{am:['11:30','13:00'], pm:['18:00','20:30']},
-        5:{am:null, pm:['17:30','21:00']},
-        6:{am:['12:00','13:00'], pm:['17:30','21:00']},
-        0:{am:null, pm:['17:30','21:00']}
-      }}
+      { id:'camille', name:'Camille', scheduleVersions: clone(CAMILLE_VERSIONS) },
+      { id:'kim', name:'Kim', scheduleVersions: clone(KIM_VERSIONS) }
     ],
     // records[dateKey][empId] = { shifts:[{start,end,pauses:[{start,end}]}], override:null|{am,pm} }
     records:{
@@ -301,11 +364,24 @@ function genRecovery(){
   for(let i=0;i<8;i++){ if(i===4)s+='-'; s+=ch[Math.floor(Math.random()*ch.length)]; }
   return s;
 }
+// 把旧结构(单一 schedule)升级为多版本 scheduleVersions，幂等
+function migrateEmp(e){
+  if(e.scheduleVersions) return; // 已是新结构
+  if(e.id==='kim') e.scheduleVersions = clone(KIM_VERSIONS);
+  else if(e.id==='camille') e.scheduleVersions = clone(CAMILLE_VERSIONS);
+  else e.scheduleVersions = [{ from:null, schedule: e.schedule || {0:null,1:null,2:null,3:null,4:null,5:null,6:null} }];
+  delete e.schedule;
+}
+function migrate(){
+  if(DATA && DATA.employees) DATA.employees.forEach(migrateEmp);
+  if(!DATA.recovery) DATA.recovery = genRecovery();
+  if(!DATA.active) DATA.active = {};
+  DATA.version = 2;
+}
 function load(){
   try{ const raw=localStorage.getItem(STORE_KEY); DATA = raw?JSON.parse(raw):defaultData(); }
   catch(e){ DATA = defaultData(); }
-  if(!DATA.recovery) DATA.recovery = genRecovery();
-  if(!DATA.active) DATA.active = {};
+  migrate();
   save();
 }
 function save(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(DATA)); }catch(e){} }
@@ -325,12 +401,25 @@ function todayKey(){ return dateKey(new Date()); }
 function spanSec(startT,endT){ let s=toSec(startT), e=toSec(endT); if(e<s) e+=86400; return e-s; }
 
 // ---------- COMPUTATION ----------
+// 选出某天该用哪一版排班（生效日 ≤ 当天 的最近一版；都晚于当天则用最早一版）
+function scheduleFor(e, dKey){
+  if(!e || !e.scheduleVersions || !e.scheduleVersions.length) return {};
+  let best=null;
+  e.scheduleVersions.forEach(v=>{
+    const f = v.from || '0000-00-00';
+    if(f <= dKey){ if(!best || f > (best.from||'0000-00-00')) best=v; }
+  });
+  if(!best){
+    best = e.scheduleVersions.slice().sort((a,b)=>(a.from||'0000-00-00').localeCompare(b.from||'0000-00-00'))[0];
+  }
+  return best ? best.schedule : {};
+}
 function getContract(empId, dKey){
   const rec = DATA.records[dKey] && DATA.records[dKey][empId];
   if(rec && rec.override) return rec.override;
   const e=emp(empId); if(!e) return {am:null,pm:null};
   const dow = new Date(dKey+'T12:00:00').getDay();
-  const sc = e.schedule[dow];
+  const sc = scheduleFor(e, dKey)[dow];
   return sc?{am:sc.am||null, pm:sc.pm||null}:{am:null,pm:null};
 }
 function shiftNet(sh){
@@ -778,31 +867,61 @@ function clearOverride(){
 
 // ---------- EMPLOYEES TAB ----------
 let schedEmp=null;
+function fmtDate(d){ if(!d) return ''; const [y,m,dd]=d.split('-'); return dd+'/'+m+'/'+y; }
+function weeklyTotalOf(schedule){
+  let wk=0; for(let dow=0;dow<7;dow++){ const sc=schedule[dow]; if(sc){ if(sc.am)wk+=spanSec(sc.am[0]+':00',sc.am[1]+':00'); if(sc.pm)wk+=spanSec(sc.pm[0]+':00',sc.pm[1]+':00'); } } return wk;
+}
+function sortVersions(e){ e.scheduleVersions.sort((a,b)=>(a.from||'0000-00-00').localeCompare(b.from||'0000-00-00')); }
 function renderEmployees(b){
   if(!schedEmp && DATA.employees[0]) schedEmp=DATA.employees[0].id;
   const L=I18N[DATA.lang];
   let html=`<div class="emp-pick">${DATA.employees.map(e=>`<button class="${schedEmp===e.id?'active':''}" onclick="schedEmp='${e.id}';renderTab()">${e.name}</button>`).join('')}<button onclick="openAddEmp()">+ ${t('addEmp')}</button></div>`;
   const e=emp(schedEmp); if(!e){ b.innerHTML=html; return; }
-  // weekly total
-  let wk=0; for(let dow=0;dow<7;dow++){ const sc=e.schedule[dow]; if(sc){ if(sc.am)wk+=spanSec(sc.am[0]+':00',sc.am[1]+':00'); if(sc.pm)wk+=spanSec(sc.pm[0]+':00',sc.pm[1]+':00'); } }
-  html+=`<div class="stat" style="margin-bottom:16px"><div class="sl">${t('weeklyTotal')} · ${e.name}</div><div class="sv tnum">${secToHM(wk)}</div></div>`;
+  sortVersions(e);
+  html+=`<div class="field"><label>${t('name')}</label><input value="${e.name}" onchange="renameEmp('${e.id}',this.value)"></div>`;
   const order=[1,2,3,4,5,6,0];
-  order.forEach(dow=>{
-    const sc=e.schedule[dow];
-    html+=`<div class="sched-day"><div class="dn">${L.days[dow]}</div><div class="sched-times">${sc?formatContract({am:sc.am,pm:sc.pm}):t('rest')}</div></div>`;
+  const todayV = scheduleFor(e, todayKey());
+  e.scheduleVersions.forEach((v,vi)=>{
+    const isActive = v.schedule===todayV;
+    const label = v.from? `${t('fromDate')} ${fmtDate(v.from)}` : t('sinceStart');
+    let daysHtml='';
+    order.forEach(dow=>{ const sc=v.schedule[dow]; daysHtml+=`<div class="sched-day"><div class="dn">${L.days[dow]}</div><div class="sched-times">${sc?formatContract({am:sc.am,pm:sc.pm}):t('rest')}</div></div>`; });
+    html+=`<div style="border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px;${isActive?'border-color:var(--moss);border-width:2px':''}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div><div style="font-weight:700;font-size:15px">${label}${isActive?` <span style="font-size:10px;color:var(--moss);letter-spacing:1px">● ${t('current')}</span>`:''}</div>
+        <div class="sl" style="margin-top:2px">${t('weeklyTotal')}: ${secToHM(weeklyTotalOf(v.schedule))}</div></div>
+        <div style="display:flex;gap:6px">
+          <button class="mini" onclick="openSchedEdit('${e.id}',${vi})">${t('edit')}</button>
+          ${e.scheduleVersions.length>1?`<button class="mini ghost danger" onclick="delVersion('${e.id}',${vi})">✕</button>`:''}
+        </div>
+      </div>
+      ${daysHtml}
+    </div>`;
   });
-  html+=`<button class="btn-sec" style="margin-top:14px" onclick="openSchedEdit('${e.id}')">${t('editSchedule')}</button>`;
+  html+=`<button class="btn-sec" onclick="openAddVersion('${e.id}')">+ ${t('newPeriod')}</button>`;
   html+=`<button class="btn-sec danger" onclick="delEmp('${e.id}')">${t('delete')} · ${e.name}</button>`;
   b.innerHTML=html;
 }
 let schedBuf=null;
-function openSchedEdit(empId){
-  const e=emp(empId); schedBuf={emp:empId, name:e.name, schedule:JSON.parse(JSON.stringify(e.schedule))};
+function openSchedEdit(empId, vi){
+  const e=emp(empId); const v=e.scheduleVersions[vi];
+  schedBuf={emp:empId, vi, isNew:false, name:e.name, from:v.from||null, isBase:(v.from===null||v.from===undefined), schedule:clone(v.schedule)};
+  drawSchedEdit();
+}
+function openAddVersion(empId){
+  const e=emp(empId);
+  const base = clone(scheduleFor(e, todayKey())); // 以当前生效版为模板，省得从头填
+  schedBuf={emp:empId, vi:-1, isNew:true, name:e.name, from:todayKey(), isBase:false, schedule:base};
   drawSchedEdit();
 }
 function drawSchedEdit(){
   const L=I18N[DATA.lang]; const order=[1,2,3,4,5,6,0];
-  let body=`<div class="field"><label>${t('name')}</label><input value="${schedBuf.name}" onchange="schedBuf.name=this.value"></div>`;
+  let body='';
+  if(schedBuf.isNew || !schedBuf.isBase){
+    body+=`<div class="field"><label>${t('effectiveFrom')}</label><input type="date" value="${schedBuf.from||''}" onchange="schedBuf.from=this.value"></div>`;
+  } else {
+    body+=`<div class="note">${t('sinceStart')} — ${t('baseVersionNote')}</div>`;
+  }
   order.forEach(dow=>{
     const sc=schedBuf.schedule[dow]||{am:null,pm:null};
     function seg(key,lab){
@@ -813,7 +932,7 @@ function drawSchedEdit(){
     }
     body+=`<div class="sched-day"><div class="dn">${L.days[dow]}</div>${seg('am',t('morning'))}${seg('pm',t('afternoon'))}</div>`;
   });
-  modal(`<div class="modal-head"><h2 class="serif">${t('editSchedule')}</h2><button class="x" onclick="openAdmin()">×</button></div>
+  modal(`<div class="modal-head"><h2 class="serif">${schedBuf.isNew?t('newPeriod'):t('editSchedule')}</h2><button class="x" onclick="openAdmin()">×</button></div>
     <div class="modal-body">${body}<div style="height:10px"></div><button class="btn-primary" onclick="saveSched()">${t('save')}</button></div>`);
 }
 function ensureDay(dow){ if(!schedBuf.schedule[dow]) schedBuf.schedule[dow]={am:null,pm:null}; }
@@ -821,15 +940,28 @@ function toggleSched(dow,key,on){ ensureDay(dow); schedBuf.schedule[dow][key]= o
   if(!schedBuf.schedule[dow].am && !schedBuf.schedule[dow].pm) schedBuf.schedule[dow]=null; drawSchedEdit(); }
 function setSched(dow,key,idx,val){ ensureDay(dow); if(!schedBuf.schedule[dow][key]) schedBuf.schedule[dow][key]=['','']; schedBuf.schedule[dow][key][idx]=val; }
 function saveSched(){
-  const e=emp(schedBuf.emp); e.name=schedBuf.name.trim()||e.name;
-  // normalize empty days to null
+  const e=emp(schedBuf.emp);
   const sc={}; for(let dow=0;dow<7;dow++){ const d=schedBuf.schedule[dow]; sc[dow]=(d&&(d.am||d.pm))?{am:d.am,pm:d.pm}:null; }
-  e.schedule=sc; save(); openAdmin();
+  const from = schedBuf.isBase ? null : (schedBuf.from||todayKey());
+  if(schedBuf.isNew){
+    // 同一生效日已存在则覆盖
+    const exist=e.scheduleVersions.find(v=>(v.from||null)===from);
+    if(exist) exist.schedule=sc; else e.scheduleVersions.push({from, schedule:sc});
+  } else {
+    e.scheduleVersions[schedBuf.vi]={from, schedule:sc};
+  }
+  sortVersions(e); save(); openAdmin();
+}
+function renameEmp(empId, val){ const e=emp(empId); if(e){ e.name=val.trim()||e.name; save(); } }
+function delVersion(empId, vi){
+  const e=emp(empId); if(e.scheduleVersions.length<=1) return;
+  if(!confirm(t('confirmDelVersion'))) return;
+  e.scheduleVersions.splice(vi,1); sortVersions(e); save(); openAdmin();
 }
 function openAddEmp(){
   const id='emp_'+Date.now();
-  DATA.employees.push({id, name:'Nouveau', schedule:{0:null,1:null,2:null,3:null,4:null,5:null,6:null}});
-  save(); schedEmp=id; openSchedEdit(id);
+  DATA.employees.push({id, name:'Nouveau', scheduleVersions:[{from:null, schedule:{0:null,1:null,2:null,3:null,4:null,5:null,6:null}}]});
+  save(); schedEmp=id; openSchedEdit(id,0);
 }
 function delEmp(empId){
   if(!confirm(t('confirmDelEmp'))) return;
@@ -872,9 +1004,20 @@ function renderSettings(b){
     <div class="pin-err" id="pin-set-msg"></div>
     <button class="btn-sec" onclick="changePin()">${t('changePin')}</button>
 
-    <div class="note" style="margin-top:18px">${t('recovery')}<div class="recovery-box">${DATA.recovery}</div>${t('backInfo')}</div>
-    <button class="btn-sec" onclick="exportBackup()">${t('exportData')}</button>
-    <label class="btn-sec" style="display:block;text-align:center">${t('importData')}<input type="file" accept=".json" style="display:none" onchange="importBackup(this)"></label>
+    <div class="note" style="margin-top:18px">${t('backupCode')} — ${t('codeInfo')}</div>
+    <button class="btn-sec" onclick="genCode()">${t('generateCode')}</button>
+    <div id="code-out" style="display:none">
+      <textarea id="code-area" readonly style="width:100%;height:90px;margin-top:8px;padding:10px;border:1px solid var(--line);border-radius:5px;font-size:11px;word-break:break-all;background:#fff;font-family:monospace"></textarea>
+      <button class="mini wine" style="width:100%;margin-top:6px;padding:11px" onclick="copyCode()">${t('copyCode')}</button>
+      <div class="pin-err" id="code-msg" style="color:var(--moss)"></div>
+    </div>
+    <textarea id="code-in" placeholder="${t('pasteCode')}" style="width:100%;height:70px;margin-top:14px;padding:10px;border:1px solid var(--line);border-radius:5px;font-size:11px;word-break:break-all;font-family:monospace"></textarea>
+    <button class="btn-sec" onclick="restoreCode()">${t('restoreCode')}</button>
+    <div class="pin-err" id="restore-msg"></div>
+
+    <div class="note" style="margin-top:18px">${t('recovery')}<div class="recovery-box">${DATA.recovery}</div></div>
+    <button class="btn-sec" onclick="exportBackup()">${t('exportData')} (.json)</button>
+    <label class="btn-sec" style="display:block;text-align:center">${t('importData')} (.json)<input type="file" accept=".json" style="display:none" onchange="importBackup(this)"></label>
   `;
 }
 function changePin(){
@@ -886,7 +1029,33 @@ function changePin(){
   DATA.password=np; save(); msg.style.color='var(--moss)'; msg.textContent='✓ '+t('pinChanged');
 }
 
-// ---------- BACKUP ----------
+// ---------- BACKUP CODE (texte, sans fichier) ----------
+function toB64(str){ const bytes=new TextEncoder().encode(str); let bin=''; bytes.forEach(b=>bin+=String.fromCharCode(b)); return btoa(bin); }
+function fromB64(b64){ const bin=atob(b64.trim()); const bytes=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i); return new TextDecoder().decode(bytes); }
+function genCode(){
+  const code='PTG1:'+toB64(JSON.stringify(DATA));
+  const out=document.getElementById('code-out'); const area=document.getElementById('code-area');
+  out.style.display='block'; area.value=code; area.focus(); area.select();
+}
+function copyCode(){
+  const area=document.getElementById('code-area'); const msg=document.getElementById('code-msg');
+  const txt=area.value;
+  const ok=()=>{ msg.textContent=t('copied'); setTimeout(()=>{if(msg)msg.textContent='';},2000); };
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(ok,()=>{ area.select(); document.execCommand('copy'); ok(); }); }
+  else { area.select(); document.execCommand('copy'); ok(); }
+}
+function restoreCode(){
+  const raw=document.getElementById('code-in').value.trim(); const msg=document.getElementById('restore-msg');
+  if(!raw){ return; }
+  try{
+    const b64 = raw.startsWith('PTG1:') ? raw.slice(5) : raw;
+    const d=JSON.parse(fromB64(b64));
+    if(d&&d.employees&&d.records){ DATA=d; migrate(); save(); msg.style.color='var(--moss)'; msg.textContent=t('restored'); setTimeout(()=>openAdmin(),700); }
+    else { msg.style.color='var(--wine)'; msg.textContent=t('invalidCode'); }
+  }catch(e){ msg.style.color='var(--wine)'; msg.textContent=t('invalidCode'); }
+}
+
+// ---------- BACKUP (fichier) ----------
 function download(filename, blob){
   const url=URL.createObjectURL(blob); const a=document.createElement('a');
   a.href=url; a.download=filename; document.body.appendChild(a); a.click();
@@ -899,7 +1068,7 @@ function exportBackup(){
 function importBackup(input){
   const f=input.files[0]; if(!f) return;
   const r=new FileReader();
-  r.onload=()=>{ try{ const d=JSON.parse(r.result); if(d&&d.employees&&d.records){ DATA=d; if(!DATA.active)DATA.active={}; if(!DATA.recovery)DATA.recovery=genRecovery(); save(); openAdmin(); } else alert('✕'); }catch(e){ alert('✕'); } };
+  r.onload=()=>{ try{ const d=JSON.parse(r.result); if(d&&d.employees&&d.records){ DATA=d; migrate(); save(); openAdmin(); } else alert('✕'); }catch(e){ alert('✕'); } };
   r.readAsText(f);
 }
 
