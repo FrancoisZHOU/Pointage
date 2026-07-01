@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#7A2E2E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pointage">
+<title>Pointage</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%237A2E2E'/><circle cx='50' cy='50' r='30' fill='none' stroke='%23C9A961' stroke-width='5'/><path d='M50 32 L50 50 L62 58' stroke='%23C9A961' stroke-width='5' fill='none' stroke-linecap='round'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  :root {
+    --cream: #FBF7F0; --ink: #1F1B17; --wine: #7A2E2E; --gold: #C9A961;
+    --moss: #4A5D3A; --stone: #8B8478; --paper: #F1EADD; --line: rgba(31,27,23,0.08);
+    --shadow: 0 1px 2px rgba(0,0,0,0.03), 0 6px 20px rgba(0,0,0,0.05);
+  }
+  html, body {
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--cream); color: var(--ink);
+    min-height: 100vh; overflow-x: hidden;
+  }
+  body { background-image: radial-gradient(circle at 15% 10%, rgba(201,169,97,0.05), transparent 40%), radial-gradient(circle at 85% 90%, rgba(122,46,46,0.04), transparent 40%); }
+  .serif { font-family: 'Cormorant Garamond', Georgia, serif; }
+  .hidden { display: none !important; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  input, select { font-family: inherit; font-size: 16px; }
+
+  /* ============ EMPLOYEE VIEW ============ */
+  #employee-view { min-height: 100vh; display: flex; flex-direction: column; }
+  .emp-header {
+    padding: 22px 26px 18px; display: flex; justify-content: space-between; align-items: flex-start;
+    border-bottom: 1px solid var(--line);
+  }
+  .emp-header .brand { font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 600; letter-spacing: -0.3px; }
+  .emp-header .brand small { display: block; font-family: 'DM Sans', sans-serif; font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: var(--stone); font-weight: 600; margin-top: 2px; }
+  .emp-header .now { text-align: right; }
+  .emp-header .now .time { font-family: 'Cormorant Garamond', serif; font-size: 30px; font-weight: 600; color: var(--wine); line-height: 1; }
+  .emp-header .now .day { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--stone); margin-top: 5px; }
+
+  .cards { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 20px; align-content: start; }
+  @media (max-width: 620px) { .cards { grid-template-columns: 1fr; } }
+
+  .ecard {
+    background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 24px 22px 22px;
+    box-shadow: var(--shadow); position: relative; overflow: hidden; display: flex; flex-direction: column;
+    transition: box-shadow .25s ease;
+  }
+  .ecard::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background: var(--stone); opacity:.25; transition: all .25s; }
+  .ecard.service::before { background: var(--moss); opacity:1; }
+  .ecard.pause::before { background: var(--gold); opacity:1; }
+  .ecard .ename { font-family:'Cormorant Garamond',serif; font-size:30px; font-weight:600; line-height:1; }
+  .ecard .estate { margin-top:8px; font-size:12px; letter-spacing:2px; text-transform:uppercase; font-weight:600; color:var(--stone); }
+  .ecard.service .estate { color: var(--moss); }
+  .ecard.pause .estate { color: #A8852F; }
+  .ecard .etimer { font-family:'Cormorant Garamond',serif; font-size:46px; font-weight:600; margin:14px 0 4px; line-height:1; letter-spacing:-1px; }
+  .ecard .esub { font-size:12px; color:var(--stone); min-height:16px; letter-spacing:.3px; }
+  .ecard .ebtns { margin-top:20px; display:flex; flex-direction:column; gap:10px; }
+  .ecard .ebtns.row { flex-direction:row; }
+  .ebtn {
+    flex:1; padding:17px 14px; border-radius:4px; font-size:13px; font-weight:700; letter-spacing:2px;
+    text-transform:uppercase; transition: transform .08s ease, background .15s ease, opacity .15s; text-align:center;
+  }
+  .ebtn:active { transform: scale(0.97); }
+  .ebtn.start { background:var(--ink); color:var(--cream); }
+  .ebtn.start:hover { background:var(--moss); }
+  .ebtn.end { background:var(--wine); color:#fff; }
+  .ebtn.pause { background:var(--paper); color:var(--ink); border:1px solid var(--line); }
+  .ebtn.resume { background:var(--gold); color:#fff; }
+  .ecard .toast {
+    position:absolute; inset:0; background:rgba(255,255,255,.96); display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:6px; opacity:0; pointer-events:none; transition:opacity .3s;
+  }
+  .ecard .toast.show { opacity:1; pointer-events:auto; }
+  .ecard .toast .check { width:54px; height:54px; border-radius:50%; background:var(--moss); color:#fff; display:flex; align-items:center; justify-content:center; font-size:28px; }
+  .ecard .toast.endt .check { background:var(--wine); }
+  .ecard .toast .ttime { font-family:'Cormorant Garamond',serif; font-size:34px; font-weight:600; }
+  .ecard .toast .tlabel { font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--stone); }
+  .ecard .toast .tsegs { font-size:12px; color:var(--stone); text-align:center; margin-top:4px; line-height:1.5; padding:0 10px; }
+
+  .admin-link {
+    text-align:center; padding:18px; font-size:10px; letter-spacing:3px; text-transform:uppercase;
+    color:var(--stone); opacity:.5; border-top:1px solid var(--line);
+  }
+
+  /* ============ MODAL / ADMIN ============ */
+  .overlay { position:fixed; inset:0; background:rgba(31,27,23,.45); backdrop-filter:blur(3px); z-index:50; display:flex; align-items:center; justify-content:center; padding:18px; }
+  .modal { background:var(--cream); border-radius:8px; width:100%; max-width:440px; max-height:92vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,.3); }
+  .modal.wide { max-width:920px; }
+  .modal-head { padding:20px 24px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; background:var(--cream); z-index:2; }
+  .modal-head h2 { font-family:'Cormorant Garamond',serif; font-size:24px; font-weight:600; }
+  .modal-body { padding:22px 24px; }
+  .x { font-size:26px; color:var(--stone); line-height:1; padding:4px 8px; }
+
+  /* PIN pad */
+  .pin-display { display:flex; gap:12px; justify-content:center; margin:8px 0 22px; }
+  .pin-dot { width:14px; height:14px; border-radius:50%; border:1.5px solid var(--stone); transition:all .15s; }
+  .pin-dot.filled { background:var(--wine); border-color:var(--wine); }
+  .pin-pad { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .pin-key { padding:18px; font-size:22px; font-family:'Cormorant Garamond',serif; font-weight:600; background:#fff; border:1px solid var(--line); border-radius:6px; transition:transform .08s; }
+  .pin-key:active { transform:scale(.95); background:var(--paper); }
+  .pin-err { color:var(--wine); text-align:center; font-size:13px; min-height:18px; margin-top:12px; }
+  .link-btn { background:none; color:var(--stone); text-decoration:underline; font-size:12px; display:block; margin:14px auto 0; }
+
+  /* Admin tabs */
+  .tabs { display:flex; gap:4px; padding:0 24px; border-bottom:1px solid var(--line); background:var(--cream); position:sticky; top:65px; z-index:2; overflow-x:auto; }
+  .tab { padding:14px 16px; font-size:12px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--stone); border-bottom:2px solid transparent; white-space:nowrap; }
+  .tab.active { color:var(--wine); border-bottom-color:var(--wine); }
+
+  .lang-switch { display:flex; gap:0; border:1px solid var(--line); border-radius:5px; overflow:hidden; }
+  .lang-switch button { padding:5px 10px; font-size:11px; font-weight:600; color:var(--stone); background:#fff; }
+  .lang-switch button.active { background:var(--wine); color:#fff; }
+
+  /* Records */
+  .day-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+  .day-nav button { padding:8px 14px; background:#fff; border:1px solid var(--line); border-radius:5px; font-size:18px; }
+  .day-nav .dlabel { font-family:'Cormorant Garamond',serif; font-size:22px; font-weight:600; }
+  .rec { background:#fff; border:1px solid var(--line); border-radius:6px; padding:16px 18px; margin-bottom:12px; }
+  .rec h3 { font-family:'Cormorant Garamond',serif; font-size:22px; font-weight:600; display:flex; justify-content:space-between; align-items:baseline; }
+  .rec h3 .ot { font-family:'DM Sans',sans-serif; font-size:13px; font-weight:700; color:var(--wine); letter-spacing:.5px; }
+  .rec h3 .ot.zero { color:var(--stone); }
+  .rec .seg { font-size:13px; color:var(--ink); margin-top:8px; line-height:1.6; }
+  .rec .seg .lbl { display:inline-block; min-width:64px; font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--stone); }
+  .rec .pausetag { color:var(--gold); font-size:11px; }
+  .rec .meta { font-size:12px; color:var(--stone); margin-top:8px; padding-top:8px; border-top:1px dashed var(--line); display:flex; justify-content:space-between; }
+  .rec .editrow { margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; }
+  .mini { padding:7px 12px; font-size:11px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; border-radius:4px; border:1px solid var(--line); background:#fff; }
+  .mini.wine { background:var(--wine); color:#fff; border-color:var(--wine); }
+  .mini.ghost { color:var(--stone); }
+  .empty { text-align:center; color:var(--stone); padding:30px; font-size:14px; }
+  .override-flag { display:inline-block; font-size:10px; background:var(--gold); color:#fff; padding:2px 7px; border-radius:3px; letter-spacing:1px; text-transform:uppercase; margin-left:8px; vertical-align:middle; }
+
+  /* Forms */
+  .field { margin-bottom:16px; }
+  .field label { display:block; font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:var(--stone); margin-bottom:6px; font-weight:600; }
+  .field input, .field select { width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:5px; background:#fff; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .row3 { display:grid; grid-template-columns:1fr 1fr auto; gap:10px; align-items:end; }
+  .btn-primary { width:100%; padding:15px; background:var(--ink); color:var(--cream); border-radius:5px; font-size:13px; font-weight:700; letter-spacing:2px; text-transform:uppercase; }
+  .btn-primary:active { transform:scale(.99); }
+  .btn-sec { width:100%; padding:13px; background:transparent; border:1px solid var(--line); border-radius:5px; font-size:12px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--ink); margin-top:8px; }
+  .seg-edit { background:var(--paper); border-radius:6px; padding:12px; margin-bottom:10px; }
+  .seg-edit .seg-edit-head { font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:var(--stone); font-weight:600; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; }
+  .sched-day { background:#fff; border:1px solid var(--line); border-radius:6px; padding:12px 14px; margin-bottom:8px; }
+  .sched-day .dn { font-weight:600; font-size:14px; margin-bottom:8px; }
+  .sched-times { font-size:13px; color:var(--stone); }
+  .emp-pick { display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+  .emp-pick button { padding:9px 16px; border:1px solid var(--line); border-radius:20px; font-size:13px; font-weight:600; background:#fff; color:var(--stone); }
+  .emp-pick button.active { background:var(--wine); color:#fff; border-color:var(--wine); }
+  .note { font-size:12px; color:var(--stone); line-height:1.6; background:var(--paper); padding:12px 14px; border-radius:6px; margin-bottom:16px; }
+  .month-pick { display:flex; gap:10px; align-items:center; margin-bottom:16px; }
+  .month-pick select { flex:1; }
+  .stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:18px; }
+  .stat { background:#fff; border:1px solid var(--line); border-radius:6px; padding:16px; }
+  .stat .sl { font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--stone); }
+  .stat .sv { font-family:'Cormorant Garamond',serif; font-size:30px; font-weight:600; margin-top:4px; }
+  .stat .sv small { font-size:14px; color:var(--stone); }
+  .danger { color:var(--wine); }
+  .pause-list-item { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+  .pause-list-item input { flex:1; }
+  .recovery-box { background:var(--ink); color:var(--gold); font-family:'Cormorant Garamond',serif; font-size:28px; letter-spacing:4px; text-align:center; padding:18px; border-radius:6px; margin:12px 0; font-weight:600; }
+</style>
+</head>
+<body>
+
+<!-- ============ EMPLOYEE VIEW ============ -->
+<div id="employee-view">
+  <div class="emp-header">
+    <div class="brand serif">Pointage<small id="brand-sub">Présences</small></div>
+    <div class="now">
+      <div class="time tnum serif" id="live-clock">--:--</div>
+      <div class="day" id="live-date"></div>
+    </div>
+  </div>
+  <div class="cards" id="emp-cards"></div>
+  <div class="admin-link" id="open-admin">· Administration ·</div>
+</div>
+
+<!-- modal mount -->
+<div id="modal-mount"></div>
+
+<script>
+/* =========================================================
+   POINTAGE — système de pointage hors-ligne
+   Données: localStorage. Aucune dépendance externe.
+   ========================================================= */
+
+// ---------- i18n (admin only; employé = FR) ----------
+const I18N = {
+  fr: {
+    admin:'Administration', records:'Pointages', employees:'Employés', settings:'Réglages',
+    today:'Aujourd\'hui', overtime:'Heures sup.', worked:'Travaillé', net:'Net',
+    morning:'Matin', afternoon:'Soir', pause:'Pause', noRecord:'Aucun pointage ce jour',
+    edit:'Modifier', backfill:'Saisir manuellement', delete:'Supprimer', save:'Enregistrer',
+    cancel:'Annuler', contract:'Planning', override:'Exception', start:'Début', end:'Fin',
+    addPause:'+ Pause', monthExport:'Exporter le mois', monthTable:'Tableau mensuel',
+    totalOt:'Total heures sup.', daysWorked:'Jours travaillés', totalWorked:'Total travaillé',
+    schedule:'Planning hebdomadaire', editSchedule:'Modifier le planning', addEmp:'Ajouter un employé',
+    name:'Nom', weeklyTotal:'Total hebdo', changePin:'Changer le code', oldPin:'Code actuel',
+    newPin:'Nouveau code', confirmPin:'Confirmer', backup:'Sauvegarde', exportData:'Exporter les données',
+    importData:'Importer les données', recovery:'Code de récupération', forgot:'Code oublié ?',
+    enterRecovery:'Entrez le code de récupération', dayOverride:'Horaire exceptionnel du jour',
+    rest:'Repos', confirmDel:'Supprimer ce pointage ?', confirmDelEmp:'Supprimer cet employé et tout son historique ?',
+    pinChanged:'Code modifié', saved:'Enregistré', wrongOld:'Code actuel incorrect', pinMismatch:'Les codes ne correspondent pas',
+    days:['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'],
+    months:['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'],
+    backInfo:'La sauvegarde télécharge un fichier .json avec toutes les données et le code de récupération. Gardez-le en lieu sûr.',
+    overrideNote:'Modifie l\'horaire prévu pour CE JOUR uniquement (changement de planning, travail un jour de repos). Le planning hebdomadaire reste inchangé.',
+    sinceStart:'Depuis le début', fromDate:'À partir du', current:'Actuel', newPeriod:'Nouvelle période',
+    effectiveFrom:'Effectif à partir du', baseVersionNote:'Version de base, utilisée pour toutes les dates antérieures.',
+    confirmDelVersion:'Supprimer cette période de planning ?',
+    backupCode:'Code de sauvegarde', generateCode:'Générer le code', copyCode:'Copier', pasteCode:'Coller le code ici',
+    restoreCode:'Restaurer depuis le code', copied:'Copié ✓', restored:'Données restaurées ✓', invalidCode:'Code invalide',
+    codeInfo:'Génère un texte qui contient toutes les données. Copiez-le et envoyez-le (WhatsApp, etc.) vers un autre appareil, puis collez-le pour restaurer. Aucun fichier à télécharger.',
+    deactivate:'Masquer du pointage', reactivate:'Réafficher au pointage',
+    inactiveNote:'Employé masqué du pointage. Historique et exports conservés.',
+    typeNameToConfirm:'ATTENTION : ceci supprime aussi TOUT son historique. Pour confirmer, tapez le nom'
+  },
+  en: {
+    admin:'Administration', records:'Records', employees:'Employees', settings:'Settings',
+    today:'Today', overtime:'Overtime', worked:'Worked', net:'Net',
+    morning:'Morning', afternoon:'Evening', pause:'Break', noRecord:'No record this day',
+    edit:'Edit', backfill:'Enter manually', delete:'Delete', save:'Save',
+    cancel:'Cancel', contract:'Schedule', override:'Override', start:'Start', end:'End',
+    addPause:'+ Break', monthExport:'Export month', monthTable:'Monthly table',
+    totalOt:'Total overtime', daysWorked:'Days worked', totalWorked:'Total worked',
+    schedule:'Weekly schedule', editSchedule:'Edit schedule', addEmp:'Add employee',
+    name:'Name', weeklyTotal:'Weekly total', changePin:'Change code', oldPin:'Current code',
+    newPin:'New code', confirmPin:'Confirm', backup:'Backup', exportData:'Export data',
+    importData:'Import data', recovery:'Recovery code', forgot:'Forgot code?',
+    enterRecovery:'Enter recovery code', dayOverride:'Day exception schedule',
+    rest:'Off', confirmDel:'Delete this record?', confirmDelEmp:'Delete this employee and all history?',
+    pinChanged:'Code changed', saved:'Saved', wrongOld:'Current code incorrect', pinMismatch:'Codes do not match',
+    days:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
+    months:['January','February','March','April','May','June','July','August','September','October','November','December'],
+    backInfo:'Backup downloads a .json file with all data and the recovery code. Keep it safe.',
+    overrideNote:'Changes the planned schedule for THIS DAY only (shift change, working a rest day). The weekly schedule stays unchanged.',
+    sinceStart:'Since the beginning', fromDate:'From', current:'Current', newPeriod:'New period',
+    effectiveFrom:'Effective from', baseVersionNote:'Base version, used for all earlier dates.',
+    confirmDelVersion:'Delete this schedule period?',
+    backupCode:'Backup code', generateCode:'Generate code', copyCode:'Copy', pasteCode:'Paste the code here',
+    restoreCode:'Restore from code', copied:'Copied ✓', restored:'Data restored ✓', invalidCode:'Invalid code',
+    codeInfo:'Generates a text containing all data. Copy and send it (WhatsApp, etc.) to another device, then paste to restore. No file to download.',
+    deactivate:'Hide from clock-in', reactivate:'Show on clock-in again',
+    inactiveNote:'Employee hidden from clock-in screen. History and exports kept.',
+    typeNameToConfirm:'WARNING: this also deletes ALL their history. To confirm, type the name'
+  },
+  zh: {
+    admin:'后台管理', records:'打卡记录', employees:'员工', settings:'设置',
+    today:'今天', overtime:'加班', worked:'工作', net:'净工时',
+    morning:'上午', afternoon:'晚班', pause:'暂停', noRecord:'当天无打卡记录',
+    edit:'修改', backfill:'手动补录', delete:'删除', save:'保存',
+    cancel:'取消', contract:'排班', override:'临时调整', start:'开始', end:'结束',
+    addPause:'+ 暂停', monthExport:'导出当月', monthTable:'月度表格',
+    totalOt:'本月总加班', daysWorked:'出勤天数', totalWorked:'本月总工时',
+    schedule:'每周排班', editSchedule:'修改排班', addEmp:'添加员工',
+    name:'姓名', weeklyTotal:'每周合计', changePin:'修改密码', oldPin:'当前密码',
+    newPin:'新密码', confirmPin:'确认密码', backup:'数据备份', exportData:'导出数据',
+    importData:'导入数据', recovery:'恢复码', forgot:'忘记密码？',
+    enterRecovery:'输入恢复码', dayOverride:'当天临时排班',
+    rest:'休息', confirmDel:'删除这条记录？', confirmDelEmp:'删除该员工及其全部历史记录？',
+    pinChanged:'密码已修改', saved:'已保存', wrongOld:'当前密码错误', pinMismatch:'两次密码不一致',
+    days:['周日','周一','周二','周三','周四','周五','周六'],
+    months:['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'],
+    backInfo:'备份会下载一个 .json 文件，包含全部数据和恢复码。请妥善保存。',
+    overrideNote:'只修改“当天”的预定排班（调班、休息日临时上班）。每周排班模板不受影响。',
+    sinceStart:'自始生效', fromDate:'起始', current:'当前', newPeriod:'新增一个排班时段',
+    effectiveFrom:'生效起始日', baseVersionNote:'基础版本，用于此日期之前的所有天。',
+    confirmDelVersion:'删除这个排班时段？',
+    backupCode:'备份码', generateCode:'生成备份码', copyCode:'复制', pasteCode:'把备份码粘贴到这里',
+    restoreCode:'用备份码恢复', copied:'已复制 ✓', restored:'数据已恢复 ✓', invalidCode:'备份码无效',
+    codeInfo:'生成一段包含全部数据的文字。复制后用微信等发到另一台设备，粘贴即可恢复。无需下载任何文件。',
+    deactivate:'从打卡界面隐藏', reactivate:'恢复显示在打卡界面',
+    inactiveNote:'该员工已从打卡界面隐藏。历史记录和导出全部保留。',
+    typeNameToConfirm:'警告：删除会连同其全部历史记录一起删除！如确认，请输入姓名'
+  }
+};
+function t(k){ return (I18N[DATA.lang]||I18N.fr)[k]; }
+
+// ---------- DATA MODEL ----------
+const STORE_KEY = 'pointage_data_v1';
+let DATA = null;
+
+// ---- Schedule versions (effective-dated). from:null = depuis le début ----
+const CAMILLE_VERSIONS = [
+  { from:null, schedule:{
+    1:{am:null, pm:['18:00','21:00']},
+    2:{am:null, pm:['18:30','21:00']},
+    3:{am:['11:30','13:00'], pm:['18:00','20:00']},
+    4:null,
+    5:{am:['11:30','13:00'], pm:['18:30','21:30']},
+    6:{am:null, pm:['18:30','21:30']},
+    0:{am:null, pm:['18:00','21:30']}
+  }},
+  { from:'2026-06-15', schedule:{
+    1:{am:null, pm:['18:00','21:00']},
+    2:{am:null, pm:['18:30','21:00']},
+    3:null,
+    4:{am:null, pm:['18:30','21:00']},
+    5:{am:['11:30','13:00'], pm:['18:30','21:30']},
+    6:{am:['12:00','13:00'], pm:['18:30','21:30']},
+    0:{am:null, pm:['18:00','21:30']}
+  }},
+  { from:'2026-06-22', schedule:{
+    1:null,
+    2:{am:['11:30','13:00'], pm:['18:00','20:30']},
+    3:null,
+    4:{am:['11:30','13:00'], pm:['18:00','20:30']},
+    5:{am:['11:30','12:30'], pm:['17:30','21:00']},
+    6:{am:['12:00','13:00'], pm:['18:00','21:00']},
+    0:{am:null, pm:['17:30','21:00']}
+  }}
+];
+const KIM_VERSIONS = [
+  { from:null, schedule:{
+    1:null,
+    2:{am:['11:30','13:00'], pm:['17:30','20:30']},
+    3:{am:null, pm:['19:00','21:00']},
+    4:{am:['11:30','13:00'], pm:['18:00','20:30']},
+    5:{am:null, pm:['17:30','21:00']},
+    6:{am:['12:00','13:00'], pm:['17:30','21:00']},
+    0:{am:null, pm:['17:30','21:00']}
+  }},
+  { from:'2026-06-15', schedule:{
+    1:null,
+    2:{am:['11:30','13:00'], pm:['17:30','20:30']},
+    3:{am:['11:30','13:00'], pm:['18:00','20:00']},
+    4:{am:['11:30','13:00'], pm:['18:00','20:00']},
+    5:{am:null, pm:['17:30','21:00']},
+    6:{am:null, pm:['17:30','21:00']},
+    0:{am:null, pm:['17:30','21:00']}
+  }},
+  { from:'2026-06-22', schedule:{
+    1:null,
+    2:{am:['13:00','13:30'], pm:['17:30','20:30']},
+    3:{am:['11:30','13:00'], pm:['18:00','21:00']},
+    4:{am:['13:00','13:30'], pm:['18:00','20:00']},
+    5:{am:['12:30','13:30'], pm:['17:30','21:00']},
+    6:{am:null, pm:['17:30','21:00']},
+    0:{am:null, pm:['17:30','21:00']}
+  }}
+];
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+
+function defaultData(){
+  return {
+    version:2, lang:'fr', password:'2808',
+    recovery: genRecovery(),
+    employees:[
+      { id:'camille', name:'Camille', scheduleVersions: clone(CAMILLE_VERSIONS) },
+      { id:'kim', name:'Kim', scheduleVersions: clone(KIM_VERSIONS) }
+    ],
+    // records[dateKey][empId] = { shifts:[{start,end,pauses:[{start,end}]}], override:null|{am,pm} }
+    records:{
+      '2026-06-02':{
+        camille:{ shifts:[{start:'18:25:00', end:'22:45:00', pauses:[]}], override:null },
+        kim:{ shifts:[
+          {start:'11:25:00', end:'13:50:00', pauses:[]},
+          {start:'17:30:00', end:'22:30:00', pauses:[]}
+        ], override:null }
+      }
+    },
+    active:{} // active[empId] = { startTs, pauses:[{startTs,endTs}], status:'service'|'pause' }
+  };
+}
+function genRecovery(){
+  const ch='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s='';
+  for(let i=0;i<8;i++){ if(i===4)s+='-'; s+=ch[Math.floor(Math.random()*ch.length)]; }
+  return s;
+}
+// 把旧结构(单一 schedule)升级为多版本 scheduleVersions，幂等
+function migrateEmp(e){
+  if(e.scheduleVersions) return; // 已是新结构
+  if(e.id==='kim') e.scheduleVersions = clone(KIM_VERSIONS);
+  else if(e.id==='camille') e.scheduleVersions = clone(CAMILLE_VERSIONS);
+  else e.scheduleVersions = [{ from:null, schedule: e.schedule || {0:null,1:null,2:null,3:null,4:null,5:null,6:null} }];
+  delete e.schedule;
+}
+function migrate(){
+  if(DATA && DATA.employees) DATA.employees.forEach(migrateEmp);
+  if(!DATA.recovery) DATA.recovery = genRecovery();
+  if(!DATA.active) DATA.active = {};
+  DATA.version = 2;
+}
+function load(){
+  try{ const raw=localStorage.getItem(STORE_KEY); DATA = raw?JSON.parse(raw):defaultData(); }
+  catch(e){ DATA = defaultData(); }
+  migrate();
+  save();
+}
+function save(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(DATA)); }catch(e){} }
+function emp(id){ return DATA.employees.find(e=>e.id===id); }
+
+// ---------- TIME HELPERS ----------
+function pad(n){ return String(n).padStart(2,'0'); }
+function hms(d){ return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds()); }
+function dateKey(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function toSec(t){ if(!t) return 0; const p=t.split(':').map(Number); return p[0]*3600+p[1]*60+(p[2]||0); }
+function secToHMS(s){ s=Math.max(0,Math.round(s)); return pad(Math.floor(s/3600))+':'+pad(Math.floor(s%3600/60))+':'+pad(s%60); }
+function secToHM(s){ s=Math.max(0,Math.round(s)); const h=Math.floor(s/3600), m=Math.floor(s%3600/60); return h+'h'+pad(m); }
+function hm(t){ return t? t.slice(0,5):''; } // HH:MM display
+function todayKey(){ return dateKey(new Date()); }
+
+// span handling (no overnight expected, but guard)
+function spanSec(startT,endT){ let s=toSec(startT), e=toSec(endT); if(e<s) e+=86400; return e-s; }
+
+// ---------- COMPUTATION ----------
+// 选出某天该用哪一版排班（生效日 ≤ 当天 的最近一版；都晚于当天则用最早一版）
+function scheduleFor(e, dKey){
+  if(!e || !e.scheduleVersions || !e.scheduleVersions.length) return {};
+  let best=null;
+  e.scheduleVersions.forEach(v=>{
+    const f = v.from || '0000-00-00';
+    if(f <= dKey){ if(!best || f > (best.from||'0000-00-00')) best=v; }
+  });
+  if(!best){
+    best = e.scheduleVersions.slice().sort((a,b)=>(a.from||'0000-00-00').localeCompare(b.from||'0000-00-00'))[0];
+  }
+  return best ? best.schedule : {};
+}
+function getContract(empId, dKey){
+  const rec = DATA.records[dKey] && DATA.records[dKey][empId];
+  if(rec && rec.override) return rec.override;
+  const e=emp(empId); if(!e) return {am:null,pm:null};
+  const dow = new Date(dKey+'T12:00:00').getDay();
+  const sc = scheduleFor(e, dKey)[dow];
+  return sc?{am:sc.am||null, pm:sc.pm||null}:{am:null,pm:null};
+}
+function shiftNet(sh){
+  let net = spanSec(sh.start, sh.end);
+  (sh.pauses||[]).forEach(p=>{ if(p.start&&p.end) net -= spanSec(p.start,p.end); });
+  return Math.max(0,net);
+}
+function shiftPause(sh){
+  let pz=0; (sh.pauses||[]).forEach(p=>{ if(p.start&&p.end) pz+=spanSec(p.start,p.end); }); return pz;
+}
+// split threshold between am/pm
+function bucketThreshold(contract){
+  if(contract.am && contract.pm) return (toSec(contract.am[1])+toSec(contract.pm[0]))/2;
+  return toSec('16:00'); // default split
+}
+function assignBucket(sh, contract){
+  return toSec(sh.start) < bucketThreshold(contract) ? 'am' : 'pm';
+}
+// per-day overtime {am, pm, total}
+function dayOvertime(empId, dKey){
+  const rec = DATA.records[dKey] && DATA.records[dKey][empId];
+  if(!rec || !rec.shifts || !rec.shifts.length) return {am:0,pm:0,total:0};
+  const contract = getContract(empId, dKey);
+  const buckets={am:[],pm:[]};
+  rec.shifts.forEach(sh=>{ buckets[assignBucket(sh,contract)].push(sh); });
+  function bucketOT(list, seg){
+    if(!list.length) return 0;
+    const netWorked = list.reduce((a,sh)=>a+shiftNet(sh),0);
+    if(!seg) return netWorked; // hors planning → tout en heures sup
+    const ins = list.map(sh=>toSec(sh.start)), outs = list.map(sh=>{ let e=toSec(sh.end); if(e<toSec(sh.start))e+=86400; return e; });
+    const earliestIn = Math.min(...ins), latestOut = Math.max(...outs);
+    const cStart=toSec(seg[0]), cEnd=toSec(seg[1]), cDur=cEnd-cStart;
+    const presence = latestOut-earliestIn;
+    const pauseEq = presence - netWorked;
+    const ot = Math.max(latestOut,cEnd) - Math.min(earliestIn,cStart) - pauseEq - cDur;
+    return Math.max(0, ot);
+  }
+  const am=bucketOT(buckets.am, contract.am), pm=bucketOT(buckets.pm, contract.pm);
+  return {am, pm, total:am+pm};
+}
+function dayNetWorked(empId, dKey){
+  const rec = DATA.records[dKey] && DATA.records[dKey][empId];
+  if(!rec || !rec.shifts) return 0;
+  return rec.shifts.reduce((a,sh)=>a+shiftNet(sh),0);
+}
+// worked segments of a shift (split by pauses) → [[start,end],...]
+function shiftSegments(sh){
+  const segs=[]; let cur=sh.start;
+  (sh.pauses||[]).forEach(p=>{ if(p.start&&p.end){ segs.push([cur,p.start]); cur=p.end; } });
+  segs.push([cur, sh.end]); return segs;
+}
+
+// ---------- SOUND (gentle two-tone) ----------
+let AC=null;
+function ping(end){
+  try{
+    AC = AC || new (window.AudioContext||window.webkitAudioContext)();
+    if(AC.state==='suspended') AC.resume();
+    const now=AC.currentTime;
+    const notes = end? [659.25,523.25] : [523.25,659.25]; // C5,E5
+    notes.forEach((f,i)=>{
+      const o=AC.createOscillator(), g=AC.createGain();
+      o.type='sine'; o.frequency.value=f;
+      const ts=now+i*0.09;
+      g.gain.setValueAtTime(0, ts);
+      g.gain.linearRampToValueAtTime(0.12, ts+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ts+0.22);
+      o.connect(g); g.connect(AC.destination); o.start(ts); o.stop(ts+0.25);
+    });
+  }catch(e){}
+}
+
+// ---------- EMPLOYEE VIEW ----------
+function liveState(empId){
+  const a=DATA.active[empId];
+  if(!a) return 'repos';
+  return a.status;
+}
+function activeElapsed(empId){
+  const a=DATA.active[empId]; if(!a) return 0;
+  const now=Date.now();
+  let span=(now - new Date(a.startTs).getTime())/1000;
+  (a.pauses||[]).forEach(p=>{ const e=p.endTs?new Date(p.endTs).getTime():now; span-=(e-new Date(p.startTs).getTime())/1000; });
+  return Math.max(0,span);
+}
+function todayCompletedNet(empId){
+  const rec=DATA.records[todayKey()] && DATA.records[todayKey()][empId];
+  if(!rec||!rec.shifts) return 0;
+  return rec.shifts.reduce((a,sh)=>a+shiftNet(sh),0);
+}
+// contract end for an in-progress shift (to choose Fin de service vs Terminer)
+function activeContractEnd(empId){
+  const a=DATA.active[empId]; if(!a) return null;
+  const startD=new Date(a.startTs);
+  const contract=getContract(empId, dateKey(startD));
+  const startSec=startD.getHours()*3600+startD.getMinutes()*60+startD.getSeconds();
+  const seg = startSec < bucketThreshold(contract) ? contract.am : contract.pm;
+  return seg? toSec(seg[1]) : null;
+}
+function endLabel(empId){
+  const ce=activeContractEnd(empId);
+  if(ce===null) return 'Terminer';
+  const now=new Date(); const nowSec=now.getHours()*3600+now.getMinutes()*60+now.getSeconds();
+  return nowSec>=ce ? 'Terminer' : 'Fin de service';
+}
+
+function renderEmpCards(){
+  const wrap=document.getElementById('emp-cards');
+  wrap.innerHTML='';
+  DATA.employees.filter(e=>!e.inactive).forEach(e=>{
+    const st=liveState(e.id);
+    const card=document.createElement('div');
+    card.className='ecard '+(st==='service'?'service':st==='pause'?'pause':'');
+    const stateTxt = st==='service'?'En service' : st==='pause'?'En pause' : 'Au repos';
+    let btns='';
+    if(st==='repos'){
+      btns=`<div class="ebtns"><button class="ebtn start" data-act="start" data-id="${e.id}">Commencer</button></div>`;
+    } else if(st==='service'){
+      btns=`<div class="ebtns row"><button class="ebtn pause" data-act="pause" data-id="${e.id}">Pause</button><button class="ebtn end" data-act="end" data-id="${e.id}">${endLabel(e.id)}</button></div>`;
+    } else { // pause
+      btns=`<div class="ebtns row"><button class="ebtn resume" data-act="resume" data-id="${e.id}">Reprendre</button><button class="ebtn end" data-act="end" data-id="${e.id}">${endLabel(e.id)}</button></div>`;
+    }
+    let sub='';
+    if(st!=='repos'){ const a=DATA.active[e.id]; sub='Depuis '+hm(hms(new Date(a.startTs))); }
+    card.innerHTML=`
+      <div class="ename serif">${e.name}</div>
+      <div class="estate">${stateTxt}</div>
+      <div class="esub">${sub}</div>
+      ${btns}
+      <div class="toast" id="toast-${e.id}"><div class="check">✓</div><div class="ttime tnum serif"></div><div class="tlabel"></div><div class="tsegs"></div></div>`;
+    wrap.appendChild(card);
+  });
+  wrap.querySelectorAll('button[data-act]').forEach(b=>{
+    b.onclick=()=>punch(b.dataset.id, b.dataset.act);
+  });
+}
+
+function showToast(empId, timeStr, label, segs, isEnd){
+  const tt=document.getElementById('toast-'+empId);
+  if(!tt) return;
+  tt.classList.toggle('endt', !!isEnd);
+  tt.querySelector('.ttime').textContent=timeStr;
+  tt.querySelector('.tlabel').textContent=label;
+  tt.querySelector('.tsegs').textContent=segs||'';
+  tt.classList.add('show');
+  setTimeout(()=>tt.classList.remove('show'), isEnd?3400:1800);
+}
+
+const cardLock={};
+function punch(empId, act){
+  if(cardLock[empId]) return; // 确认提示期间锁定，防误触
+  const now=new Date(); const nowISO=now.toISOString(); const tstr=hms(now);
+  const lockMs = act==='end' ? 3400 : 1800;
+  cardLock[empId]=true; setTimeout(()=>{ cardLock[empId]=false; }, lockMs);
+  if(act==='start'){
+    DATA.active[empId]={ startTs:nowISO, pauses:[], status:'service' };
+    save(); ping(false); renderEmpCards();
+    showToast(empId, hm(tstr), 'Début', '', false);
+  } else if(act==='pause'){
+    const a=DATA.active[empId]; if(!a) return;
+    a.pauses.push({startTs:nowISO, endTs:null}); a.status='pause';
+    save(); ping(false); renderEmpCards();
+    showToast(empId, hm(tstr), 'Pause', '', false);
+  } else if(act==='resume'){
+    const a=DATA.active[empId]; if(!a) return;
+    const open=a.pauses.find(p=>!p.endTs); if(open) open.endTs=nowISO; a.status='service';
+    save(); ping(false); renderEmpCards();
+    showToast(empId, hm(tstr), 'Reprise', '', false);
+  } else if(act==='end'){
+    const a=DATA.active[empId]; if(!a) return;
+    const open=a.pauses.find(p=>!p.endTs); if(open) open.endTs=nowISO;
+    // build shift in start-date's records
+    const startD=new Date(a.startTs); const dk=dateKey(startD);
+    const sh={ start:hms(startD), end:tstr,
+      pauses:a.pauses.filter(p=>p.endTs).map(p=>({start:hms(new Date(p.startTs)), end:hms(new Date(p.endTs))})) };
+    if(!DATA.records[dk]) DATA.records[dk]={};
+    if(!DATA.records[dk][empId]) DATA.records[dk][empId]={shifts:[], override:(DATA.records[dk][empId]&&DATA.records[dk][empId].override)||null};
+    DATA.records[dk][empId].shifts.push(sh);
+    delete DATA.active[empId];
+    save(); ping(true); renderEmpCards();
+    showToast(empId, hm(tstr), 'Fin de service', '', true);
+  }
+}
+
+// ---------- CLOCK ----------
+function tickClock(){
+  const now=new Date(); const L=I18N.fr;
+  document.getElementById('live-clock').textContent=pad(now.getHours())+':'+pad(now.getMinutes());
+  document.getElementById('live-date').textContent=L.days[now.getDay()]+' '+now.getDate()+' '+L.months[now.getMonth()].toLowerCase();
+}
+
+// ============ INIT ============
+load();
+renderEmpCards();
+tickClock(); setInterval(tickClock, 1000);
+document.getElementById('open-admin').onclick=()=>openLogin();
+
+/* ===== ADMIN appended below ===== */
+</script>
+<script>
+// ---------- MODAL helpers ----------
+function closeModal(){ document.getElementById('modal-mount').innerHTML=''; renderEmpCards(); }
+function modal(html, wide){
+  document.getElementById('modal-mount').innerHTML=
+    `<div class="overlay" id="ov"><div class="modal ${wide?'wide':''}">${html}</div></div>`;
+  document.getElementById('ov').addEventListener('click',e=>{ if(e.target.id==='ov') closeModal(); });
+}
+
+// ---------- LOGIN ----------
+let pinBuf='';
+function openLogin(){
+  pinBuf='';
+  modal(`<div class="modal-head"><h2 class="serif">${t('admin')}</h2><button class="x" onclick="closeModal()">×</button></div>
+    <div class="modal-body">
+      <div class="pin-display" id="pin-disp"></div>
+      <div class="pin-pad" id="pin-pad"></div>
+      <div class="pin-err" id="pin-err"></div>
+      <button class="link-btn" onclick="openRecovery()">${t('forgot')}</button>
+    </div>`);
+  const pad=document.getElementById('pin-pad');
+  ['1','2','3','4','5','6','7','8','9','','0','⌫'].forEach(k=>{
+    const b=document.createElement('button'); b.className='pin-key'; b.textContent=k;
+    if(k==='') b.style.visibility='hidden';
+    b.onclick=()=>pinPress(k); pad.appendChild(b);
+  });
+  drawPin();
+}
+function drawPin(){
+  const d=document.getElementById('pin-disp'); if(!d) return;
+  d.innerHTML=''; for(let i=0;i<4;i++){ const dot=document.createElement('div'); dot.className='pin-dot'+(i<pinBuf.length?' filled':''); d.appendChild(dot); }
+}
+function pinPress(k){
+  if(k==='⌫'){ pinBuf=pinBuf.slice(0,-1); }
+  else if(k && pinBuf.length<4){ pinBuf+=k; }
+  drawPin();
+  if(pinBuf.length===4){
+    if(pinBuf===String(DATA.password)){ openAdmin(); }
+    else { document.getElementById('pin-err').textContent='✕'; pinBuf=''; setTimeout(()=>{drawPin(); const e=document.getElementById('pin-err'); if(e)e.textContent='';},600); }
+  }
+}
+function openRecovery(){
+  modal(`<div class="modal-head"><h2 class="serif">${t('recovery')}</h2><button class="x" onclick="closeModal()">×</button></div>
+   <div class="modal-body">
+     <div class="field"><label>${t('enterRecovery')}</label><input id="rec-in" placeholder="XXXX-XXXX" style="text-transform:uppercase;letter-spacing:3px;text-align:center"></div>
+     <div class="field"><label>${t('newPin')}</label><input id="rec-pin" inputmode="numeric" maxlength="4" placeholder="••••" style="text-align:center;letter-spacing:6px"></div>
+     <div class="pin-err" id="rec-err"></div>
+     <button class="btn-primary" onclick="doRecovery()">${t('save')}</button>
+   </div>`);
+}
+function doRecovery(){
+  const code=document.getElementById('rec-in').value.trim().toUpperCase();
+  const np=document.getElementById('rec-pin').value.trim();
+  if(code!==DATA.recovery){ document.getElementById('rec-err').textContent='✕'; return; }
+  if(!/^\d{4}$/.test(np)){ document.getElementById('rec-err').textContent='4 chiffres'; return; }
+  DATA.password=np; save(); openAdmin();
+}
+
+// ---------- ADMIN SHELL ----------
+let adminTab='records';
+let recDate=todayKey();
+function openAdmin(){
+  modal(`<div class="modal-head">
+      <h2 class="serif">${t('admin')}</h2>
+      <div style="display:flex;gap:12px;align-items:center">
+        <div class="lang-switch">
+          ${['fr','en','zh'].map(l=>`<button class="${DATA.lang===l?'active':''}" onclick="setLang('${l}')">${l.toUpperCase()}</button>`).join('')}
+        </div>
+        <button class="x" onclick="closeModal()">×</button>
+      </div>
+    </div>
+    <div class="tabs" id="adm-tabs">
+      ${[['records',t('records')],['employees',t('employees')],['settings',t('settings')]].map(([k,lab])=>`<button class="tab ${adminTab===k?'active':''}" onclick="setTab('${k}')">${lab}</button>`).join('')}
+    </div>
+    <div class="modal-body" id="adm-body"></div>`, true);
+  renderTab();
+}
+function setLang(l){ DATA.lang=l; save(); openAdmin(); }
+function setTab(k){ adminTab=k; openAdmin(); }
+function renderTab(){
+  const b=document.getElementById('adm-body'); if(!b) return;
+  if(adminTab==='records') renderRecords(b);
+  else if(adminTab==='employees') renderEmployees(b);
+  else renderSettings(b);
+}
+
+// ---------- RECORDS TAB ----------
+function shiftDate(delta){ const d=new Date(recDate+'T12:00:00'); d.setDate(d.getDate()+delta); recDate=dateKey(d); renderTab(); }
+function renderRecords(b){
+  const L=I18N[DATA.lang]; const d=new Date(recDate+'T12:00:00');
+  const dlabel=L.days[d.getDay()]+' '+d.getDate()+' '+L.months[d.getMonth()];
+  let html=`<div class="day-nav"><button onclick="shiftDate(-1)">‹</button><div class="dlabel serif">${dlabel}</div><button onclick="shiftDate(1)">›</button></div>`;
+  DATA.employees.forEach(e=>{
+    const rec=DATA.records[recDate]&&DATA.records[recDate][e.id];
+    const contract=getContract(e.id, recDate);
+    const hasOverride=rec&&rec.override;
+    const cTxt = formatContract(contract);
+    if(!rec||!rec.shifts||!rec.shifts.length){
+      html+=`<div class="rec"><h3>${e.name} ${hasOverride?`<span class="override-flag">${t('override')}</span>`:''}<span class="ot zero">—</span></h3>
+        <div class="meta"><span>${t('contract')}: ${cTxt||t('rest')}</span><span></span></div>
+        <div class="editrow">
+          <button class="mini" onclick="openRecordEdit('${e.id}')">${t('backfill')}</button>
+          <button class="mini ghost" onclick="openOverride('${e.id}')">${t('dayOverride')}</button>
+        </div></div>`;
+      return;
+    }
+    const ot=dayOvertime(e.id, recDate);
+    const net=dayNetWorked(e.id, recDate);
+    let segHtml='';
+    // group display by am/pm
+    const buckets={am:[],pm:[]}; rec.shifts.forEach(sh=>buckets[assignBucket(sh,contract)].push(sh));
+    [['am',t('morning'),ot.am,contract.am],['pm',t('afternoon'),ot.pm,contract.pm]].forEach(([key,lab,oseg,cseg])=>{
+      if(!buckets[key].length) return;
+      const segs=[]; buckets[key].forEach(sh=>{ shiftSegments(sh).forEach(s=>segs.push(hm(s[0])+'–'+hm(s[1]))); });
+      const otTxt = oseg>0?`+${secToHM(oseg)}`:'';
+      segHtml+=`<div class="seg"><span class="lbl">${lab}</span> ${segs.join('  /  ')} ${otTxt?`<span class="pausetag" style="color:var(--wine)">${otTxt}</span>`:''}</div>`;
+    });
+    html+=`<div class="rec">
+      <h3>${e.name} ${hasOverride?`<span class="override-flag">${t('override')}</span>`:''}<span class="ot ${ot.total>0?'':'zero'}">${t('overtime')}: ${secToHM(ot.total)}</span></h3>
+      ${segHtml}
+      <div class="meta"><span>${t('net')}: ${secToHM(net)}</span><span>${t('contract')}: ${cTxt||t('rest')}</span></div>
+      <div class="editrow">
+        <button class="mini" onclick="openRecordEdit('${e.id}')">${t('edit')}</button>
+        <button class="mini ghost" onclick="openOverride('${e.id}')">${t('dayOverride')}</button>
+        <button class="mini ghost danger" onclick="delRecord('${e.id}')">${t('delete')}</button>
+      </div></div>`;
+  });
+  b.innerHTML=html;
+}
+function formatContract(c){
+  const parts=[]; if(c.am) parts.push(hm2(c.am)); if(c.pm) parts.push(hm2(c.pm)); return parts.join(' / ');
+}
+function hm2(seg){ return seg[0]+'–'+seg[1]; }
+function delRecord(empId){
+  if(!confirm(t('confirmDel'))) return;
+  if(DATA.records[recDate]) { delete DATA.records[recDate][empId]; if(!Object.keys(DATA.records[recDate]).length) delete DATA.records[recDate]; }
+  save(); renderTab();
+}
+
+// ---------- RECORD EDIT / BACKFILL ----------
+let editBuf=null;
+function openRecordEdit(empId){
+  const rec=DATA.records[recDate]&&DATA.records[recDate][empId];
+  editBuf = rec&&rec.shifts? JSON.parse(JSON.stringify(rec.shifts)) : [];
+  if(!editBuf.length) editBuf.push({start:'18:00:00', end:'21:00:00', pauses:[]});
+  editBuf._emp=empId;
+  drawRecordEdit();
+}
+function drawRecordEdit(){
+  const empId=editBuf._emp; const e=emp(empId);
+  const L=I18N[DATA.lang]; const d=new Date(recDate+'T12:00:00');
+  let body='';
+  editBuf.forEach((sh,i)=>{
+    if(i==='_emp') return;
+    body+=`<div class="seg-edit">
+      <div class="seg-edit-head"><span>${t('worked')} ${i+1}</span><button class="mini ghost danger" onclick="rmShift(${i})">✕</button></div>
+      <div class="row2">
+        <div class="field" style="margin:0"><label>${t('start')}</label><input type="time" step="1" value="${editBuf[i].start}" onchange="editBuf[${i}].start=this.value"></div>
+        <div class="field" style="margin:0"><label>${t('end')}</label><input type="time" step="1" value="${editBuf[i].end}" onchange="editBuf[${i}].end=this.value"></div>
+      </div>
+      <div style="margin-top:10px">
+        ${(editBuf[i].pauses||[]).map((p,pi)=>`<div class="pause-list-item">
+          <span class="pausetag">${t('pause')}</span>
+          <input type="time" step="1" value="${p.start}" onchange="editBuf[${i}].pauses[${pi}].start=this.value">
+          <input type="time" step="1" value="${p.end}" onchange="editBuf[${i}].pauses[${pi}].end=this.value">
+          <button class="mini ghost danger" onclick="rmPause(${i},${pi})">✕</button>
+        </div>`).join('')}
+        <button class="mini ghost" onclick="addPause(${i})">${t('addPause')}</button>
+      </div>
+    </div>`;
+  });
+  modal(`<div class="modal-head"><h2 class="serif">${e.name} · ${d.getDate()}/${d.getMonth()+1}</h2><button class="x" onclick="openAdmin()">×</button></div>
+    <div class="modal-body">
+      ${body}
+      <button class="btn-sec" onclick="addShift()">+ ${t('worked')}</button>
+      <div style="height:14px"></div>
+      <button class="btn-primary" onclick="saveRecordEdit()">${t('save')}</button>
+    </div>`);
+}
+function addShift(){ editBuf.push({start:'18:00:00',end:'21:00:00',pauses:[]}); drawRecordEdit(); }
+function rmShift(i){ editBuf.splice(i,1); drawRecordEdit(); }
+function addPause(i){ editBuf[i].pauses=editBuf[i].pauses||[]; editBuf[i].pauses.push({start:'19:00:00',end:'19:15:00'}); drawRecordEdit(); }
+function rmPause(i,pi){ editBuf[i].pauses.splice(pi,1); drawRecordEdit(); }
+function normTime(t){ if(!t) return t; const p=t.split(':'); while(p.length<3)p.push('00'); return p.map(x=>pad(Number(x))).join(':'); }
+function saveRecordEdit(){
+  const empId=editBuf._emp;
+  const shifts=editBuf.filter((s,i)=>i!=='_emp'&&typeof s==='object').map(s=>({
+    start:normTime(s.start), end:normTime(s.end),
+    pauses:(s.pauses||[]).filter(p=>p.start&&p.end).map(p=>({start:normTime(p.start),end:normTime(p.end)}))
+  }));
+  if(!DATA.records[recDate]) DATA.records[recDate]={};
+  const prevOverride = DATA.records[recDate][empId] && DATA.records[recDate][empId].override || null;
+  DATA.records[recDate][empId]={shifts, override:prevOverride};
+  save(); openAdmin();
+}
+
+// ---------- DAY OVERRIDE ----------
+let ovBuf=null;
+function openOverride(empId){
+  const rec=DATA.records[recDate]&&DATA.records[recDate][empId];
+  const cur = rec&&rec.override? JSON.parse(JSON.stringify(rec.override)) : getContract(empId,recDate);
+  ovBuf={ emp:empId, am:cur.am?cur.am.slice():null, pm:cur.pm?cur.pm.slice():null };
+  drawOverride();
+}
+function drawOverride(){
+  const e=emp(ovBuf.emp);
+  function segField(key,lab){
+    const on=!!ovBuf[key];
+    return `<div class="seg-edit">
+      <div class="seg-edit-head"><span>${lab}</span>
+        <label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0">
+          <input type="checkbox" ${on?'checked':''} onchange="toggleOvSeg('${key}',this.checked)" style="width:auto"> ${on?'':t('rest')}
+        </label>
+      </div>
+      ${on?`<div class="row2">
+        <div class="field" style="margin:0"><label>${t('start')}</label><input type="time" value="${ovBuf[key][0]}" onchange="ovBuf.${key}[0]=this.value"></div>
+        <div class="field" style="margin:0"><label>${t('end')}</label><input type="time" value="${ovBuf[key][1]}" onchange="ovBuf.${key}[1]=this.value"></div>
+      </div>`:''}
+    </div>`;
+  }
+  modal(`<div class="modal-head"><h2 class="serif">${t('dayOverride')}</h2><button class="x" onclick="openAdmin()">×</button></div>
+    <div class="modal-body">
+      <div class="note">${e.name} · ${recDate}<br>${t('overrideNote')}</div>
+      ${segField('am',t('morning'))}
+      ${segField('pm',t('afternoon'))}
+      <button class="btn-primary" onclick="saveOverride()">${t('save')}</button>
+      <button class="btn-sec" onclick="clearOverride()">${t('cancel')} ${t('override')}</button>
+    </div>`);
+}
+function toggleOvSeg(key,on){ ovBuf[key]= on? (key==='am'?['11:30','13:00']:['18:00','21:00']) : null; drawOverride(); }
+function saveOverride(){
+  const empId=ovBuf.emp;
+  if(!DATA.records[recDate]) DATA.records[recDate]={};
+  if(!DATA.records[recDate][empId]) DATA.records[recDate][empId]={shifts:[], override:null};
+  DATA.records[recDate][empId].override={am:ovBuf.am, pm:ovBuf.pm};
+  save(); openAdmin();
+}
+function clearOverride(){
+  const empId=ovBuf.emp;
+  if(DATA.records[recDate]&&DATA.records[recDate][empId]){
+    DATA.records[recDate][empId].override=null;
+    if(!DATA.records[recDate][empId].shifts.length){ delete DATA.records[recDate][empId]; if(!Object.keys(DATA.records[recDate]).length) delete DATA.records[recDate]; }
+  }
+  save(); openAdmin();
+}
+
+// ---------- EMPLOYEES TAB ----------
+let schedEmp=null;
+function fmtDate(d){ if(!d) return ''; const [y,m,dd]=d.split('-'); return dd+'/'+m+'/'+y; }
+function weeklyTotalOf(schedule){
+  let wk=0; for(let dow=0;dow<7;dow++){ const sc=schedule[dow]; if(sc){ if(sc.am)wk+=spanSec(sc.am[0]+':00',sc.am[1]+':00'); if(sc.pm)wk+=spanSec(sc.pm[0]+':00',sc.pm[1]+':00'); } } return wk;
+}
+function sortVersions(e){ e.scheduleVersions.sort((a,b)=>(a.from||'0000-00-00').localeCompare(b.from||'0000-00-00')); }
+function renderEmployees(b){
+  if(!schedEmp && DATA.employees[0]) schedEmp=DATA.employees[0].id;
+  const L=I18N[DATA.lang];
+  let html=`<div class="emp-pick">${DATA.employees.map(e=>`<button class="${schedEmp===e.id?'active':''}" onclick="schedEmp='${e.id}';renderTab()">${e.inactive?'⏸ ':''}${e.name}</button>`).join('')}<button onclick="openAddEmp()">+ ${t('addEmp')}</button></div>`;
+  const e=emp(schedEmp); if(!e){ b.innerHTML=html; return; }
+  sortVersions(e);
+  if(e.inactive) html+=`<div class="note" style="border-left:3px solid var(--wine)">⏸ ${t('inactiveNote')}</div>`;
+  html+=`<div class="field"><label>${t('name')}</label><input value="${e.name}" onchange="renameEmp('${e.id}',this.value)"></div>`;
+  const order=[1,2,3,4,5,6,0];
+  const todayV = scheduleFor(e, todayKey());
+  e.scheduleVersions.forEach((v,vi)=>{
+    const isActive = v.schedule===todayV;
+    const label = v.from? `${t('fromDate')} ${fmtDate(v.from)}` : t('sinceStart');
+    let daysHtml='';
+    order.forEach(dow=>{ const sc=v.schedule[dow]; daysHtml+=`<div class="sched-day"><div class="dn">${L.days[dow]}</div><div class="sched-times">${sc?formatContract({am:sc.am,pm:sc.pm}):t('rest')}</div></div>`; });
+    html+=`<div style="border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px;${isActive?'border-color:var(--moss);border-width:2px':''}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div><div style="font-weight:700;font-size:15px">${label}${isActive?` <span style="font-size:10px;color:var(--moss);letter-spacing:1px">● ${t('current')}</span>`:''}</div>
+        <div class="sl" style="margin-top:2px">${t('weeklyTotal')}: ${secToHM(weeklyTotalOf(v.schedule))}</div></div>
+        <div style="display:flex;gap:6px">
+          <button class="mini" onclick="openSchedEdit('${e.id}',${vi})">${t('edit')}</button>
+          ${e.scheduleVersions.length>1?`<button class="mini ghost danger" onclick="delVersion('${e.id}',${vi})">✕</button>`:''}
+        </div>
+      </div>
+      ${daysHtml}
+    </div>`;
+  });
+  html+=`<button class="btn-sec" onclick="openAddVersion('${e.id}')">+ ${t('newPeriod')}</button>`;
+  html+=`<button class="btn-sec" onclick="toggleInactive('${e.id}')">${e.inactive?('▶ '+t('reactivate')):('⏸ '+t('deactivate'))}</button>`;
+  html+=`<button class="btn-sec danger" onclick="delEmp('${e.id}')">${t('delete')} · ${e.name}</button>`;
+  b.innerHTML=html;
+}
+function toggleInactive(empId){
+  const e=emp(empId); if(!e) return;
+  e.inactive=!e.inactive;
+  if(e.inactive) delete DATA.active[empId]; // 停用时清掉进行中的打卡
+  save(); openAdmin();
+}
+let schedBuf=null;
+function openSchedEdit(empId, vi){
+  const e=emp(empId); const v=e.scheduleVersions[vi];
+  schedBuf={emp:empId, vi, isNew:false, name:e.name, from:v.from||null, isBase:(v.from===null||v.from===undefined), schedule:clone(v.schedule)};
+  drawSchedEdit();
+}
+function openAddVersion(empId){
+  const e=emp(empId);
+  const base = clone(scheduleFor(e, todayKey())); // 以当前生效版为模板，省得从头填
+  schedBuf={emp:empId, vi:-1, isNew:true, name:e.name, from:todayKey(), isBase:false, schedule:base};
+  drawSchedEdit();
+}
+function drawSchedEdit(){
+  const L=I18N[DATA.lang]; const order=[1,2,3,4,5,6,0];
+  let body='';
+  if(schedBuf.isNew || !schedBuf.isBase){
+    body+=`<div class="field"><label>${t('effectiveFrom')}</label><input type="date" value="${schedBuf.from||''}" onchange="schedBuf.from=this.value"></div>`;
+  } else {
+    body+=`<div class="note">${t('sinceStart')} — ${t('baseVersionNote')}</div>`;
+  }
+  order.forEach(dow=>{
+    const sc=schedBuf.schedule[dow]||{am:null,pm:null};
+    function seg(key,lab){
+      const on=!!sc[key];
+      return `<div style="margin-bottom:6px"><label style="display:flex;gap:6px;align-items:center;font-size:12px;text-transform:none;letter-spacing:0;color:var(--ink)">
+        <input type="checkbox" ${on?'checked':''} onchange="toggleSched(${dow},'${key}',this.checked)" style="width:auto"> ${lab}</label>
+        ${on?`<div class="row2"><input type="time" value="${sc[key][0]}" onchange="setSched(${dow},'${key}',0,this.value)"><input type="time" value="${sc[key][1]}" onchange="setSched(${dow},'${key}',1,this.value)"></div>`:''}</div>`;
+    }
+    body+=`<div class="sched-day"><div class="dn">${L.days[dow]}</div>${seg('am',t('morning'))}${seg('pm',t('afternoon'))}</div>`;
+  });
+  modal(`<div class="modal-head"><h2 class="serif">${schedBuf.isNew?t('newPeriod'):t('editSchedule')}</h2><button class="x" onclick="openAdmin()">×</button></div>
+    <div class="modal-body">${body}<div style="height:10px"></div><button class="btn-primary" onclick="saveSched()">${t('save')}</button></div>`);
+}
+function ensureDay(dow){ if(!schedBuf.schedule[dow]) schedBuf.schedule[dow]={am:null,pm:null}; }
+function toggleSched(dow,key,on){ ensureDay(dow); schedBuf.schedule[dow][key]= on?(key==='am'?['11:30','13:00']:['18:00','21:00']):null;
+  if(!schedBuf.schedule[dow].am && !schedBuf.schedule[dow].pm) schedBuf.schedule[dow]=null; drawSchedEdit(); }
+function setSched(dow,key,idx,val){ ensureDay(dow); if(!schedBuf.schedule[dow][key]) schedBuf.schedule[dow][key]=['','']; schedBuf.schedule[dow][key][idx]=val; }
+function saveSched(){
+  const e=emp(schedBuf.emp);
+  const sc={}; for(let dow=0;dow<7;dow++){ const d=schedBuf.schedule[dow]; sc[dow]=(d&&(d.am||d.pm))?{am:d.am,pm:d.pm}:null; }
+  const from = schedBuf.isBase ? null : (schedBuf.from||todayKey());
+  if(schedBuf.isNew){
+    // 同一生效日已存在则覆盖
+    const exist=e.scheduleVersions.find(v=>(v.from||null)===from);
+    if(exist) exist.schedule=sc; else e.scheduleVersions.push({from, schedule:sc});
+  } else {
+    e.scheduleVersions[schedBuf.vi]={from, schedule:sc};
+  }
+  sortVersions(e); save(); openAdmin();
+}
+function renameEmp(empId, val){ const e=emp(empId); if(e){ e.name=val.trim()||e.name; save(); } }
+function delVersion(empId, vi){
+  const e=emp(empId); if(e.scheduleVersions.length<=1) return;
+  if(!confirm(t('confirmDelVersion'))) return;
+  e.scheduleVersions.splice(vi,1); sortVersions(e); save(); openAdmin();
+}
+function openAddEmp(){
+  const id='emp_'+Date.now();
+  DATA.employees.push({id, name:'Nouveau', scheduleVersions:[{from:null, schedule:{0:null,1:null,2:null,3:null,4:null,5:null,6:null}}]});
+  save(); schedEmp=id; openSchedEdit(id,0);
+}
+function delEmp(empId){
+  const e=emp(empId); if(!e) return;
+  const typed=prompt(t('confirmDelEmp')+'\n\n'+t('typeNameToConfirm')+' « '+e.name+' »');
+  if(typed===null) return;
+  if(typed.trim()!==e.name){ alert('✕'); return; }
+  DATA.employees=DATA.employees.filter(x=>x.id!==empId);
+  Object.keys(DATA.records).forEach(dk=>{ if(DATA.records[dk][empId]){ delete DATA.records[dk][empId]; if(!Object.keys(DATA.records[dk]).length) delete DATA.records[dk]; } });
+  delete DATA.active[empId];
+  schedEmp=DATA.employees[0]?DATA.employees[0].id:null; save(); openAdmin();
+}
+
+// ---------- SETTINGS TAB ----------
+let expYM = todayKey().slice(0,7);
+function renderSettings(b){
+  const L=I18N[DATA.lang];
+  // build month options from records + current
+  const months=new Set([todayKey().slice(0,7)]);
+  Object.keys(DATA.records).forEach(dk=>months.add(dk.slice(0,7)));
+  const mopts=[...months].sort().reverse().map(ym=>{ const [y,m]=ym.split('-'); return `<option value="${ym}" ${expYM===ym?'selected':''}>${L.months[+m-1]} ${y}</option>`; }).join('');
+  // monthly stats per employee
+  let statHtml='';
+  DATA.employees.forEach(e=>{
+    let ot=0, net=0, days=0;
+    Object.keys(DATA.records).forEach(dk=>{ if(dk.slice(0,7)!==expYM) return; if(!DATA.records[dk][e.id]) return;
+      const n=dayNetWorked(e.id,dk); if(n>0){ days++; net+=n; ot+=dayOvertime(e.id,dk).total; } });
+    statHtml+=`<div class="stat"><div class="sl">${e.name}</div>
+      <div class="sv tnum">${secToHM(net)} <small>· ${t('overtime')} ${secToHM(ot)}</small></div>
+      <div class="sl" style="margin-top:6px">${t('daysWorked')}: ${days}</div></div>`;
+  });
+  b.innerHTML=`
+    <div class="note">${t('monthTable')}</div>
+    <div class="month-pick"><select onchange="expYM=this.value;renderTab()">${mopts}</select>
+      <button class="mini wine" onclick="exportMonth()">${t('monthExport')}</button></div>
+    <div class="stat-grid">${statHtml||'<div class="empty">—</div>'}</div>
+
+    <div class="note" style="margin-top:8px">${t('changePin')}</div>
+    <div class="field"><label>${t('oldPin')}</label><input id="op" inputmode="numeric" maxlength="4" placeholder="••••"></div>
+    <div class="row2">
+      <div class="field"><label>${t('newPin')}</label><input id="np" inputmode="numeric" maxlength="4" placeholder="••••"></div>
+      <div class="field"><label>${t('confirmPin')}</label><input id="cp" inputmode="numeric" maxlength="4" placeholder="••••"></div>
+    </div>
+    <div class="pin-err" id="pin-set-msg"></div>
+    <button class="btn-sec" onclick="changePin()">${t('changePin')}</button>
+
+    <div class="note" style="margin-top:18px">${t('backupCode')} — ${t('codeInfo')}</div>
+    <button class="btn-sec" onclick="genCode()">${t('generateCode')}</button>
+    <div id="code-out" style="display:none">
+      <textarea id="code-area" readonly style="width:100%;height:90px;margin-top:8px;padding:10px;border:1px solid var(--line);border-radius:5px;font-size:11px;word-break:break-all;background:#fff;font-family:monospace"></textarea>
+      <button class="mini wine" style="width:100%;margin-top:6px;padding:11px" onclick="copyCode()">${t('copyCode')}</button>
+      <div class="pin-err" id="code-msg" style="color:var(--moss)"></div>
+    </div>
+    <textarea id="code-in" placeholder="${t('pasteCode')}" style="width:100%;height:70px;margin-top:14px;padding:10px;border:1px solid var(--line);border-radius:5px;font-size:11px;word-break:break-all;font-family:monospace"></textarea>
+    <button class="btn-sec" onclick="restoreCode()">${t('restoreCode')}</button>
+    <div class="pin-err" id="restore-msg"></div>
+
+    <div class="note" style="margin-top:18px">${t('recovery')}<div class="recovery-box">${DATA.recovery}</div></div>
+    <button class="btn-sec" onclick="exportBackup()">${t('exportData')} (.json)</button>
+    <label class="btn-sec" style="display:block;text-align:center">${t('importData')} (.json)<input type="file" accept=".json" style="display:none" onchange="importBackup(this)"></label>
+  `;
+}
+function changePin(){
+  const op=document.getElementById('op').value, np=document.getElementById('np').value, cp=document.getElementById('cp').value;
+  const msg=document.getElementById('pin-set-msg');
+  if(op!==String(DATA.password)){ msg.textContent=t('wrongOld'); return; }
+  if(!/^\d{4}$/.test(np)){ msg.textContent='4 chiffres'; return; }
+  if(np!==cp){ msg.textContent=t('pinMismatch'); return; }
+  DATA.password=np; save(); msg.style.color='var(--moss)'; msg.textContent='✓ '+t('pinChanged');
+}
+
+// ---------- BACKUP CODE (texte, sans fichier) ----------
+function toB64(str){ const bytes=new TextEncoder().encode(str); let bin=''; bytes.forEach(b=>bin+=String.fromCharCode(b)); return btoa(bin); }
+function fromB64(b64){ const bin=atob(b64.trim()); const bytes=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i); return new TextDecoder().decode(bytes); }
+function genCode(){
+  const code='PTG1:'+toB64(JSON.stringify(DATA));
+  const out=document.getElementById('code-out'); const area=document.getElementById('code-area');
+  out.style.display='block'; area.value=code; area.focus(); area.select();
+}
+function copyCode(){
+  const area=document.getElementById('code-area'); const msg=document.getElementById('code-msg');
+  const txt=area.value;
+  const ok=()=>{ msg.textContent=t('copied'); setTimeout(()=>{if(msg)msg.textContent='';},2000); };
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(ok,()=>{ area.select(); document.execCommand('copy'); ok(); }); }
+  else { area.select(); document.execCommand('copy'); ok(); }
+}
+function restoreCode(){
+  const raw=document.getElementById('code-in').value.trim(); const msg=document.getElementById('restore-msg');
+  if(!raw){ return; }
+  try{
+    const b64 = raw.startsWith('PTG1:') ? raw.slice(5) : raw;
+    const d=JSON.parse(fromB64(b64));
+    if(d&&d.employees&&d.records){ DATA=d; migrate(); save(); msg.style.color='var(--moss)'; msg.textContent=t('restored'); setTimeout(()=>openAdmin(),700); }
+    else { msg.style.color='var(--wine)'; msg.textContent=t('invalidCode'); }
+  }catch(e){ msg.style.color='var(--wine)'; msg.textContent=t('invalidCode'); }
+}
+
+// ---------- BACKUP (fichier) ----------
+function download(filename, blob){
+  const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download=filename; document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },100);
+}
+function exportBackup(){
+  const blob=new Blob([JSON.stringify(DATA,null,2)],{type:'application/json'});
+  download('pointage_sauvegarde_'+todayKey()+'.json', blob);
+}
+function importBackup(input){
+  const f=input.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{ const d=JSON.parse(r.result); if(d&&d.employees&&d.records){ DATA=d; migrate(); save(); openAdmin(); } else alert('✕'); }catch(e){ alert('✕'); } };
+  r.readAsText(f);
+}
+
+/* ===== XLSX export appended below ===== */
+</script>
+<script>
+// ---------- XLSX WRITER (pure JS, offline) ----------
+const CRC_TABLE=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function crc32(b){let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=CRC_TABLE[(c^b[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+function sB(s){return new TextEncoder().encode(s);}
+function zipStore(files){
+  const chunks=[],central=[];let offset=0;
+  const u16=n=>new Uint8Array([n&0xFF,(n>>>8)&0xFF]);
+  const u32=n=>new Uint8Array([n&0xFF,(n>>>8)&0xFF,(n>>>16)&0xFF,(n>>>24)&0xFF]);
+  const cat=l=>{let len=l.reduce((a,b)=>a+b.length,0),o=new Uint8Array(len),p=0;for(const x of l){o.set(x,p);p+=x.length;}return o;};
+  const push=a=>{chunks.push(a);offset+=a.length;};
+  for(const f of files){const nb=sB(f.name),crc=crc32(f.data),lo=offset;
+    push(cat([u32(0x04034b50),u16(20),u16(0),u16(0),u16(0),u16(0),u32(crc),u32(f.data.length),u32(f.data.length),u16(nb.length),u16(0),nb,f.data]));
+    central.push({nb,crc,size:f.data.length,lo});}
+  const cdStart=offset;
+  for(const c of central) push(cat([u32(0x02014b50),u16(20),u16(20),u16(0),u16(0),u16(0),u16(0),u32(c.crc),u32(c.size),u32(c.size),u16(c.nb.length),u16(0),u16(0),u16(0),u16(0),u32(0),u32(c.lo),c.nb]));
+  const cdSize=offset-cdStart;
+  push(cat([u32(0x06054b50),u16(0),u16(0),u16(central.length),u16(central.length),u32(cdSize),u32(cdStart),u16(0)]));
+  return cat(chunks);
+}
+function colL(n){let s='';while(n>0){const m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=Math.floor((n-1)/26);}return s;}
+function xe(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+const X_CT=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
+const X_RELS=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+const X_WB=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Pointage" sheetId="1" r:id="rId1"/></sheets></workbook>`;
+const X_WBR=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+const X_ST=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="[h]:mm:ss"/></numFmts><fonts count="2"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+function buildSheetXml(emps, daysInMonth, monthName){
+  const rows=[]; const lastData=1+daysInMonth;
+  let r1=`<row r="1">`;
+  emps.forEach((e,i)=>{ const c1=colL(i*2+1),c2=colL(i*2+2);
+    r1+=`<c r="${c1}1" t="inlineStr" s="2"><is><t>${xe(monthName)}</t></is></c><c r="${c2}1" t="inlineStr" s="2"><is><t>${xe(e.name)}</t></is></c>`; });
+  r1+=`</row>`; rows.push(r1);
+  for(let d=1;d<=daysInMonth;d++){ const rr=d+1; let row=`<row r="${rr}">`;
+    emps.forEach((e,i)=>{ const c1=colL(i*2+1),c2=colL(i*2+2);
+      row+=`<c r="${c1}${rr}" s="0"><v>${d}</v></c>`;
+      const v=e.days[d];
+      row+= (v&&v>0)?`<c r="${c2}${rr}" s="1"><v>${v/86400}</v></c>`:`<c r="${c2}${rr}" t="inlineStr" s="0"><is><t>-</t></is></c>`;
+    }); row+=`</row>`; rows.push(row); }
+  const tr=lastData+1; let total=`<row r="${tr}">`;
+  emps.forEach((e,i)=>{ const c2=colL(i*2+2); let tot=0; for(let d=1;d<=daysInMonth;d++){const v=e.days[d];if(v&&v>0)tot+=v;}
+    total+=`<c r="${c2}${tr}" s="1"><f>SUM(${c2}2:${c2}${lastData})</f><v>${tot/86400}</v></c>`; });
+  total+=`</row>`; rows.push(total);
+  const lastCol=colL(emps.length*2);
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:${lastCol}${tr}"/><sheetData>${rows.join('')}</sheetData></worksheet>`;
+}
+function makeXlsx(emps, daysInMonth, monthName){
+  return zipStore([
+    {name:'[Content_Types].xml',data:sB(X_CT)},
+    {name:'_rels/.rels',data:sB(X_RELS)},
+    {name:'xl/workbook.xml',data:sB(X_WB)},
+    {name:'xl/_rels/workbook.xml.rels',data:sB(X_WBR)},
+    {name:'xl/styles.xml',data:sB(X_ST)},
+    {name:'xl/worksheets/sheet1.xml',data:sB(buildSheetXml(emps,daysInMonth,monthName))},
+  ]);
+}
+function exportMonth(){
+  const [y,m]=expYM.split('-').map(Number);
+  const daysInMonth=new Date(y,m,0).getDate();
+  const emps=DATA.employees.map(e=>{
+    const days={};
+    for(let d=1;d<=daysInMonth;d++){ const dk=`${y}-${pad(m)}-${pad(d)}`; const net=dayNetWorked(e.id,dk); if(net>0) days[d]=net; }
+    return {name:e.name, days};
+  });
+  const monthName=I18N[DATA.lang].months[m-1];
+  const bytes=makeXlsx(emps, daysInMonth, monthName);
+  download(`Pointage_${expYM}.xlsx`, new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+}
+</script>
+</body>
+</html>
