@@ -375,7 +375,7 @@ const I18N = {
 function t(k){ return (I18N[DATA.lang]||I18N.fr)[k]; }
 
 // ---------- DATA MODEL ----------
-const APP_VER='v33-ob';
+const APP_VER='v34';
 const STORE_KEY = 'pointage_data_v1';
 let DATA = null;
 
@@ -2417,8 +2417,9 @@ function download(filename, blob){
 async function shareBackupFile(){
   const today=todayKey();
   const fname=`pointage_sauvegarde_${today}.json`;
-  const blob=new Blob([JSON.stringify(DATA)],{type:'application/json'});
-  const file=new File([blob], fname, {type:'application/json'});
+  // Chrome安卓分享白名单不含application/json, 用text/plain伪装(文件名/内容不变)
+  const blob=new Blob([JSON.stringify(DATA)],{type:'text/plain'});
+  const file=new File([blob], fname, {type:'text/plain'});
   const payload={files:[file], title:`Pointage\u5907\u4efd ${today}`, text:`Pointage\u5907\u4efd ${today}`};
   if(navigator.canShare && navigator.canShare({files:[file]})){
     try{ await navigator.share(payload); return; }catch(e){ if(e&&e.name==='AbortError') return; }
