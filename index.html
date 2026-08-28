@@ -375,7 +375,7 @@ const I18N = {
 function t(k){ return (I18N[DATA.lang]||I18N.fr)[k]; }
 
 // ---------- DATA MODEL ----------
-const APP_VER='v37b';
+const APP_VER='v39';
 const STORE_KEY = 'pointage_data_v1';
 let DATA = null;
 
@@ -490,6 +490,11 @@ function migrate(){
   if(!DATA.frontExtra) DATA.frontExtra={date:null, ids:[]};
   if(!DATA.planHide) DATA.planHide=[];
   if(DATA && DATA.employees) DATA.employees.forEach(migrateEmp);
+  // v38: 合同单条 → 分段列表 contracts[]
+  if(DATA && DATA.employees) DATA.employees.forEach(e=>{
+    if(!Array.isArray(e.contracts)) e.contracts = e.contract? [clone(e.contract)] : [];
+    delete e.contract;
+  });
   if(!DATA.recovery) DATA.recovery = genRecovery();
   if(!DATA.active) DATA.active = {};
   DATA.version = 2;
@@ -1244,9 +1249,18 @@ function guardedSave(next){
     rows+=short.map(v=>`<div class="seg-emp"><span>${v.e.name}</span><span class="pl-red">${secToHM(v.plan)}/${secToHM(v.quota)} \u7f3a${secToHM(v.quota-v.plan)}</span></div>`).join('');
   }
   window._pendingNext=next;
+  let preNote=DATA.overReasons[planStart]||'';
+  if(!preNote){
+    const chg=short.filter(v=>v.multi).map(v=>{
+      const ss=v.segs.slice().sort((a,b)=>(a.from||'0000-00-00').localeCompare(b.from||'0000-00-00'));
+      const l=ss[ss.length-1]; const d=new Date((l.from||planStart)+'T12:00:00');
+      return `${v.e.name}: ${d.getDate()}/${d.getMonth()+1} \u8d77\u5468\u65f6\u6570 ${secToHM(ss[0].weekly)}\u2192${secToHM(l.weekly)}\uff0c\u8de8\u6bb5\u5468\u6309\u9ad8\u503c\u5bf9\u8d26`;
+    });
+    if(chg.length) preNote=chg.join('\uff1b');
+  }
   modal(`<div class="modal-head"><h2 class="serif">${t('planNoteT')}</h2><button class="x" onclick="openAdmin()">\u00d7</button></div>
   <div class="modal-body">${rows}
-  <textarea id="over-reason" placeholder="${t('overPh')}" style="width:100%;height:70px;margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:5px">${(DATA.overReasons[planStart]||'')}</textarea>
+  <textarea id="over-reason" placeholder="${t('overPh')}" style="width:100%;height:70px;margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:5px">${preNote}</textarea>
   <button class="btn-primary" onclick="confirmOver()">${t('overSave')}</button></div>`);
 }
 function confirmOver(){
@@ -1410,7 +1424,7 @@ function wizOverlap(empId, item){
 function wizCard(){
   if(wiz.pos>=wiz.queue.length){ wizSummary(); return; }
   const it=wiz.queue[wiz.pos]; const d=new Date(it.dk+'T12:00:00'); const L=I18N[DATA.lang];
-  const emps=DATA.employees.filter(e=>!e.inactive);
+  const emps=DATA.employees.filter(e=>!e.archived);
   const btns=emps.map(e=>{
     const exp=ctExpired(e, it.dk);
     const dis=wizOverlap(e.id, it)||exp; const cur=wiz.picks[wiz.pos]===e.id;
@@ -1586,8 +1600,9 @@ function renderPlanning(b){
   emps.forEach(e=>{
     const chg = totalsB[e.id]!==totals[e.id];
     let cur=secToHM(totals[e.id]);
-    if(e.contract && e.contract.weekly){
-      const q=e.contract.weekly, v=totals[e.id];
+    const wq=weekQuota(e, planStart);
+    if(wq){
+      const q=wq.quota, v=totals[e.id];
       const cls = v<q?'pl-red':(v>q?'pl-blue':'pl-green');
       cur=`<span class="${cls}">${secToHM(v)}/${secToHM(q)}</span>`;
     }
@@ -1954,23 +1969,61 @@ function weeklyTotalOf(schedule){
   let wk=0; for(let dow=0;dow<7;dow++){ const sc=schedule[dow]; if(sc){ if(sc.am)wk+=spanSec(sc.am[0]+':00',sc.am[1]+':00'); if(sc.pm)wk+=spanSec(sc.pm[0]+':00',sc.pm[1]+':00'); } } return wk;
 }
 function sortVersions(e){ e.scheduleVersions.sort((a,b)=>(a.from||'0000-00-00').localeCompare(b.from||'0000-00-00')); }
-function ctDays(e){ // 距到期天数; null=无到期
-  if(!e.contract||!e.contract.to) return null;
-  return Math.round((new Date(e.contract.to+'T12:00:00')-new Date(todayKey()+'T12:00:00'))/86400000);
+function ctSegs(e){ return (e && Array.isArray(e.contracts))? e.contracts : []; }
+function segFor(e, dk){ // 覆盖 dk 的合同段; 多段同覆盖取起始最晚者
+  let best=null;
+  ctSegs(e).forEach(s=>{ const f=s.from||'0000-00-00', t2=s.to||'9999-12-31';
+    if(f<=dk && dk<=t2){ if(!best || f>(best.from||'0000-00-00')) best=s; } });
+  return best;
+}
+function ctMain(e){ // 徽章/倒计时基准段: 今天覆盖段 > 最近未来段 > 最后一段
+  const ss=ctSegs(e); if(!ss.length) return null;
+  const today=todayKey();
+  const cov=segFor(e, today); if(cov) return cov;
+  const fut=ss.filter(s=>(s.from||'0000-00-00')>today).sort((a,b)=>(a.from||'').localeCompare(b.from||''))[0];
+  if(fut) return fut;
+  return ss.slice().sort((a,b)=>(a.from||'0000-00-00').localeCompare(b.from||'0000-00-00'))[ss.length-1];
+}
+function ctDays(e){ // 距基准段到期天数; null=无到期
+  const c=ctMain(e); if(!c||!c.to) return null;
+  return Math.round((new Date(c.to+'T12:00:00')-new Date(todayKey()+'T12:00:00'))/86400000);
 }
 function ctBadge(e){
-  const c=e.contract; if(!c) return '';
+  const c=ctMain(e); if(!c) return '';
+  const n=ctSegs(e).length; const seg=n>1?` \u00b7 ${n}\u6bb5`:'';
   const wk=c.weekly?` \u00b7 ${secToHM(c.weekly)}/sem`:'';
-  if(c.type==='CDI') return `<span class="ct-badge">CDI${wk}</span>`;
+  if(c.type==='CDI') return `<span class="ct-badge">CDI${wk}${seg}</span>`;
   const d=ctDays(e);
   let cls='';
   if(d!==null){ if(d<0) cls=' ct-dead'; else if(d<=3) cls=' ct-red'; else if(d<=7) cls=' ct-yellow'; }
   const dd=c.to? new Date(c.to+'T12:00:00') : null;
   const toTxt=dd? `${dd.getDate()}/${dd.getMonth()+1}` : '?';
   const dTxt=d===null?'':(d<0?` \u00b7 \u5df2\u5230\u671f${-d}\u5929`:` \u00b7 \u8fd8\u5269${d}\u5929`);
-  return `<span class="ct-badge${cls}">CDD \u00b7 \u81f3 ${toTxt}${dTxt}${wk}</span>`;
+  return `<span class="ct-badge${cls}">CDD \u00b7 \u81f3 ${toTxt}${dTxt}${wk}${seg}</span>`;
 }
-function ctExpired(e, dk){ return !!(e.contract && e.contract.type==='CDD' && e.contract.to && dk>e.contract.to); }
+function ctExpired(e, dk){ // 有 CDD 段、当日无任何段覆盖、且已过最早起始 → 到期/空窗
+  const ss=ctSegs(e); if(!ss.length) return false;
+  if(segFor(e, dk)) return false;
+  if(!ss.some(s=>s.type==='CDD')) return false;
+  const minFrom=ss.map(s=>s.from||'0000-00-00').sort()[0];
+  return dk>minFrom;
+}
+function weekQuota(e, weekStart){ // 周对账基准: 与该周重叠各段周时数的最大值
+  const wEndD=new Date(weekStart+'T12:00:00'); wEndD.setDate(wEndD.getDate()+6);
+  const wEnd=dateKey(wEndD);
+  const segs=ctSegs(e).filter(s=>s.weekly && (s.from||'0000-00-00')<=wEnd && weekStart<=(s.to||'9999-12-31'));
+  if(!segs.length) return null;
+  const vals=[...new Set(segs.map(s=>s.weekly))];
+  return {quota:Math.max.apply(null,vals), multi:vals.length>1, segs};
+}
+function applyContractRec(le, r){ // #合同 行落库: 同起始日→修正该段; 新起始日→新增段; 终止→清空
+  if(!Array.isArray(le.contracts)) le.contracts=[];
+  if(r.action==='end'){ le.contracts=[]; return; }
+  const same=le.contracts.find(s=>(s.from||null)===(r.from||null));
+  if(same){ same.type=r.type; same.to=r.to; same.weekly=r.weekly; }
+  else le.contracts.push({type:r.type, from:r.from, to:r.to, weekly:r.weekly});
+  le.contracts.sort((a,b)=>(a.from||'0000-00-00').localeCompare(b.from||'0000-00-00'));
+}
 function parseContractLines(txt){
   const out=[]; // {name,action:'set'|'end',type,from,to,weekly}
   txt.split(/\n+/).forEach(line=>{
@@ -2040,10 +2093,22 @@ function applyContractPaste(){
   contracts.forEach(r=>touch(r.name,'c'));
   scheds.forEach(r=>touch(r.name,'s'));
   const newList=[], updList=[];
+  const segTag=(le, rs)=>{ if(!rs.length) return '';
+    return ' '+rs.map(r=>{
+      if(r.action==='end') return '\u7ec8\u6b62';
+      if(!le) return '\ud83c\udd95\u6bb5';
+      const ss=ctSegs(le);
+      if(ss.find(s=>(s.from||null)===(r.from||null))) return '\u270f\ufe0f\u6bb5';
+      const f=r.from||'0000-00-00', t2=r.to||'9999-12-31';
+      const ovl=ss.some(s=>(s.from||'0000-00-00')<=t2 && f<=(s.to||'9999-12-31'));
+      return ovl? '\ud83c\udd95\u6bb5\u26a0\u91cd\u53e0' : '\ud83c\udd95\u6bb5';
+    }).join(' ');
+  };
   Object.keys(names).forEach(nm=>{
     const le=DATA.employees.find(x=>x.name.toLowerCase()===nm.toLowerCase());
     const info=names[nm];
-    const tag=`${info.c?('\u5408\u540c'+info.c):''}${info.c&&info.s?' \u00b7 ':''}${info.s?('\u6392\u73ed'+info.s):''}`;
+    const rs=contracts.filter(r=>r.name===nm);
+    const tag=`${info.c?('\u5408\u540c'+info.c+segTag(le,rs)):''}${info.c&&info.s?' \u00b7 ':''}${info.s?('\u6392\u73ed'+info.s):''}`;
     (le?updList:newList).push({nm, tag, le});
   });
   obPending={txt, contracts, scheds, newList, updList};
@@ -2069,14 +2134,13 @@ function obConfirm(){
   // 建新人
   newList.forEach((x,i)=>{
     const id='emp_'+Date.now()+'_'+i;
-    DATA.employees.push({id, name:x.nm, scheduleVersions:[{from:null, schedule:{0:null,1:null,2:null,3:null,4:null,5:null,6:null}}]});
+    DATA.employees.push({id, name:x.nm, contracts:[], scheduleVersions:[{from:null, schedule:{0:null,1:null,2:null,3:null,4:null,5:null,6:null}}]});
     created++;
   });
   const findE=nm=>DATA.employees.find(x=>x.name.toLowerCase()===nm.toLowerCase());
   contracts.forEach(r=>{
     const le=findE(r.name); if(!le) return;
-    if(r.action==='end'){ le.contract=null; cN++; return; }
-    le.contract={type:r.type, from:r.from, to:r.to, weekly:r.weekly}; cN++;
+    applyContractRec(le, r); cN++;
   });
   // 排班: 同人同日合并
   const byKey={};
@@ -2106,34 +2170,44 @@ function _applyContractPasteOld(){
   recs.forEach(r=>{
     const le=DATA.employees.find(x=>x.name.toLowerCase()===r.name.toLowerCase());
     if(!le){ miss.push(r.name); return; }
-    if(r.action==='end'){ le.contract=null; ok++; return; }
-    le.contract={type:r.type, from:r.from, to:r.to, weekly:r.weekly};
-    ok++;
+    applyContractRec(le, r); ok++;
   });
   save(); renderTab();
   alert('\u2713 '+ok+(miss.length?('  \u2715 \u672a\u627e\u5230: '+miss.join(', ')):''));
 }
-function editContractField(empId, key, val){
-  const e=emp(empId); if(!e) return;
-  if(!e.contract) e.contract={type:'CDD', from:null, to:null, weekly:null};
-  if(key==='type'){ e.contract.type=val||null; if(!val){ e.contract=null; } }
+function editContractSeg(empId, idx, key, val){
+  const e=emp(empId); if(!e||!Array.isArray(e.contracts)||!e.contracts[idx]) return;
+  const s=e.contracts[idx];
+  if(key==='type'){ s.type=val||null; }
   else if(key==='weekly'){
     const m=(val||'').match(/^(\d{1,2})[hH:]?(\d{2})?$/);
-    e.contract.weekly = m? (+m[1])*3600+(m[2]?+m[2]*60:0) : null;
-  } else { e.contract[key]=val||null; }
+    s.weekly = m? (+m[1])*3600+(m[2]?+m[2]*60:0) : null;
+  } else { s[key]=val||null; }
+  e.contracts.sort((a,b)=>(a.from||'0000-00-00').localeCompare(b.from||'0000-00-00'));
   save(); renderTab();
 }
-function calcQuota(weekStart){ // 返回 {short:[{e,plan,quota}], over:[...]}
+function addContractSeg(empId){
+  const e=emp(empId); if(!e) return;
+  if(!Array.isArray(e.contracts)) e.contracts=[];
+  e.contracts.push({type:'CDD', from:null, to:null, weekly:null});
+  save(); renderTab();
+}
+function delContractSeg(empId, idx){
+  const e=emp(empId); if(!e||!Array.isArray(e.contracts)) return;
+  e.contracts.splice(idx,1); save(); renderTab();
+}
+function calcQuota(weekStart){ // 返回 {short:[{e,plan,quota,multi,segs}], over:[...]}
   const start=new Date(weekStart+'T12:00:00');
   const short=[], over=[];
-  DATA.employees.filter(e=>!e.archived && e.contract && e.contract.weekly).forEach(e=>{
+  DATA.employees.filter(e=>!e.archived).forEach(e=>{
+    const wq=weekQuota(e, weekStart); if(!wq) return;
     let tot=0;
     for(let i=0;i<7;i++){ const d=new Date(start); d.setDate(d.getDate()+i); const dk=dateKey(d);
       const c=planCellContract(e.id,dk).c;
       if(c.am) tot+=spanSec(c.am[0]+':00',c.am[1]+':00');
       if(c.pm) tot+=spanSec(c.pm[0]+':00',c.pm[1]+':00'); }
-    if(tot<e.contract.weekly) short.push({e, plan:tot, quota:e.contract.weekly});
-    else if(tot>e.contract.weekly) over.push({e, plan:tot, quota:e.contract.weekly});
+    if(tot<wq.quota) short.push({e, plan:tot, quota:wq.quota, multi:wq.multi, segs:wq.segs});
+    else if(tot>wq.quota) over.push({e, plan:tot, quota:wq.quota, multi:wq.multi, segs:wq.segs});
   });
   return {short, over};
 }
@@ -2156,19 +2230,21 @@ function openGapList(){
 function renderEmployees(b){
   if(!schedEmp && DATA.employees[0]) schedEmp=DATA.employees[0].id;
   const L=I18N[DATA.lang];
-  let html=`<div class="emp-pick">${DATA.employees.filter(e=>!e.archived).map(e=>`<button class="${schedEmp===e.id?'active':''}" onclick="schedEmp='${e.id}';renderTab()">${e.name}${(()=>{const d=ctDays(e);if(d===null||!e.contract||e.contract.type!=='CDD')return '';if(d<0)return ' \ud83d\udd34';if(d<=3)return ' \ud83d\udd34';if(d<=7)return ' \ud83d\udfe1';return '';})()}</button>`).join('')}<button onclick="openAddEmp()">+ ${t('addEmp')}</button></div>`;
+  let html=`<div class="emp-pick">${DATA.employees.filter(e=>!e.archived).map(e=>`<button class="${schedEmp===e.id?'active':''}" onclick="schedEmp='${e.id}';renderTab()">${e.name}${(()=>{const c=ctMain(e);const d=ctDays(e);if(d===null||!c||c.type!=='CDD')return '';if(d<0)return ' \ud83d\udd34';if(d<=3)return ' \ud83d\udd34';if(d<=7)return ' \ud83d\udfe1';return '';})()}</button>`).join('')}<button onclick="openAddEmp()">+ ${t('addEmp')}</button></div>`;
   const e=emp(schedEmp); if(!e){ b.innerHTML=html; return; }
   sortVersions(e);
   html+=`<div class="field"><label>${t('name')}</label><input value="${e.name}" onchange="renameEmp('${e.id}',this.value)"></div>`;
-  if(e.contract) html+=`<div style="margin:-6px 0 12px">${ctBadge(e)}</div>`;
-  const ct=e.contract||{};
-  html+=`<div class="note" style="padding:12px"><b>${t('ctTitle')}</b>
+  if(ctSegs(e).length) html+=`<div style="margin:-6px 0 12px">${ctBadge(e)}</div>`;
+  const segsHtml=ctSegs(e).map((ct,ci)=>`
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
-      <select onchange="editContractField('${e.id}','type',this.value)" style="padding:8px;border:1px solid var(--line);border-radius:5px"><option value="" ${!ct.type?'selected':''}>\u2014</option><option ${ct.type==='CDD'?'selected':''}>CDD</option><option ${ct.type==='CDI'?'selected':''}>CDI</option></select>
-      <input type="date" value="${ct.from||''}" onchange="editContractField('${e.id}','from',this.value)" style="padding:7px;border:1px solid var(--line);border-radius:5px" title="${t('ctFrom')}">
-      <input type="date" value="${ct.to||''}" onchange="editContractField('${e.id}','to',this.value)" style="padding:7px;border:1px solid var(--line);border-radius:5px" title="${t('ctTo')}">
-      <input value="${ct.weekly?secToHM(ct.weekly):''}" placeholder="10h" onchange="editContractField('${e.id}','weekly',this.value)" style="width:64px;padding:8px;border:1px solid var(--line);border-radius:5px" title="${t('ctWeekly')}">
-    </div></div>`;
+      <select onchange="editContractSeg('${e.id}',${ci},'type',this.value)" style="padding:8px;border:1px solid var(--line);border-radius:5px"><option value="" ${!ct.type?'selected':''}>\u2014</option><option ${ct.type==='CDD'?'selected':''}>CDD</option><option ${ct.type==='CDI'?'selected':''}>CDI</option></select>
+      <input type="date" value="${ct.from||''}" onchange="editContractSeg('${e.id}',${ci},'from',this.value)" style="padding:7px;border:1px solid var(--line);border-radius:5px" title="${t('ctFrom')}">
+      <input type="date" value="${ct.to||''}" onchange="editContractSeg('${e.id}',${ci},'to',this.value)" style="padding:7px;border:1px solid var(--line);border-radius:5px" title="${t('ctTo')}">
+      <input value="${ct.weekly?secToHM(ct.weekly):''}" placeholder="10h" onchange="editContractSeg('${e.id}',${ci},'weekly',this.value)" style="width:64px;padding:8px;border:1px solid var(--line);border-radius:5px" title="${t('ctWeekly')}">
+      <button class="mini ghost danger" onclick="delContractSeg('${e.id}',${ci})">\u2715</button>
+    </div>`).join('');
+  html+=`<div class="note" style="padding:12px"><b>${t('ctTitle')}</b>${segsHtml}
+    <button class="mini" style="margin-top:8px" onclick="addContractSeg('${e.id}')">\uff0b \u6bb5</button></div>`;
   html+=`<div class="note" style="padding:12px"><b>${t('ctPasteT')}</b>
     <textarea id="ct-ta" placeholder="#\u5408\u540c Pauline CDD 2026-08-20 2026-08-27 2h\n#\u6392\u73ed Pauline 2026-08-20 18:30-19:30\n#\u5408\u540c Kim \u7ec8\u6b62" style="width:100%;height:64px;margin-top:8px;padding:8px;border:1px solid var(--line);border-radius:5px;font-size:12px"></textarea>
     <button class="mini" style="margin-top:6px" onclick="applyContractPaste()">${t('ctApply')}</button></div>`;
@@ -2451,6 +2527,14 @@ function mergeData(inc){
       });
       le.scheduleVersions.sort((a,b)=>(a.from||'0000-00-00').localeCompare(b.from||'0000-00-00'));
     }
+    if(le && ie.contracts && ie.contracts.length){
+      if(!Array.isArray(le.contracts)) le.contracts=[];
+      ie.contracts.forEach(ic=>{
+        if(!le.contracts.find(lc=>(lc.from||null)===(ic.from||null)))
+          le.contracts.push(JSON.parse(JSON.stringify(ic)));
+      });
+      le.contracts.sort((a,b)=>(a.from||'0000-00-00').localeCompare(b.from||'0000-00-00'));
+    }
   });
   Object.keys(inc.records||{}).forEach(dk=>{
     Object.keys(inc.records[dk]).forEach(eid=>{
@@ -2647,6 +2731,21 @@ function weeklyRated(empId, dk){
     if(sc.pm) t+=spanSec(sc.pm[0]+':00',sc.pm[1]+':00'); }
   return t;
 }
+function empHasTemplate(e){ // 是否有非空周排班模板(=长期稳定工); 空模板=按日期具体安排的试工/extra
+  return (e.scheduleVersions||[]).some(v=>Object.values(v.schedule||{}).some(d=>d));
+}
+function segRatedTotal(empId, seg){ // 合同段内额定排班合计(含覆盖层)
+  if(!seg.from||!seg.to) return 0;
+  let t=0, n=0; const cur=new Date(seg.from+'T12:00:00');
+  while(dateKey(cur)<=seg.to && n<370){
+    const dk=dateKey(cur);
+    const c=getContract(empId, dk);
+    if(c.am) t+=spanSec(c.am[0]+':00',c.am[1]+':00');
+    if(c.pm) t+=spanSec(c.pm[0]+':00',c.pm[1]+':00');
+    cur.setDate(cur.getDate()+1); n++;
+  }
+  return t;
+}
 function acctEmpBlock(e, y, m, daysInMonth, lastDk){
   const hSec=x=>{x=Math.round(x); return Math.floor(x/3600)+':'+String(Math.floor(x%3600/60)).padStart(2,'0')+':'+String(x%60).padStart(2,'0');};
   let tn=0,to=0,meals=0,has=false;
@@ -2654,15 +2753,33 @@ function acctEmpBlock(e, y, m, daysInMonth, lastDk){
     const net=dayNetWorked(e.id,dk);
     if(net>0){ has=true; tn+=net; to+=dayOvertime(e.id,dk).total; meals+=dayMeals(e.id,dk); } }
   if(!has) return null;
-  const ctLine=(function(){ const c=e.contract; if(!c) return null;
-    const fd=x=>{ if(!x) return null; const d=new Date(x+'T12:00:00'); return d.getDate()+'/'+(d.getMonth()+1); };
-    const wk=c.weekly?` \u00b7 \u6bcf\u5468${secToHM(c.weekly)}`:'';
-    if(c.type==='CDI') return `\u5408\u540c\uff1aCDI${wk}`;
-    const rng=[fd(c.from),fd(c.to)].filter(Boolean).join(' \u2192 ');
-    return `\u5408\u540c\uff1aCDD ${rng}${wk}`; })();
+  const fd=x=>{ if(!x) return null; const d=new Date(x+'T12:00:00'); return d.getDate()+'/'+(d.getMonth()+1); };
+  const firstDk=`${y}-${pad(m)}-01`;
+  const monthSegs=(function(){
+    let list=ctSegs(e).filter(s=>(s.from||'0000-00-00')<=lastDk && firstDk<=(s.to||'9999-12-31'));
+    if(!list.length) list=ctSegs(e).slice(-1);
+    return list; })();
+  const ctLine=(function(){
+    if(!monthSegs.length) return null;
+    return monthSegs.map(c=>{
+      const wk=c.weekly?` \u00b7 \u6bcf\u5468${secToHM(c.weekly)}`:'';
+      if(c.type==='CDI') return `\u5408\u540c\uff1aCDI${wk}`;
+      const rng=[fd(c.from),fd(c.to)].filter(Boolean).join(' \u2192 ');
+      return `\u5408\u540c\uff1aCDD ${rng}${wk}`;
+    }).join('\n'); })();
+  const ratedLine=(function(){
+    if(!monthSegs.length) return `\u989d\u5b9a\u6bcf\u5468\u5de5\u4f5c\u65f6\u95f4\uff1a${secToHM(weeklyRated(e.id,lastDk))}`;
+    const tpl=empHasTemplate(e);
+    return monthSegs.map(s=>{
+      const days=(s.from&&s.to)? Math.round((new Date(s.to+'T12:00:00')-new Date(s.from+'T12:00:00'))/86400000)+1 : null;
+      if(s.from && s.to && (!tpl || (days!==null && days<=14)))
+        return `\u5408\u540c\u671f\u989d\u5b9a\u5408\u8ba1\uff1a${secToHM(segRatedTotal(e.id,s))}\uff08${fd(s.from)}\u2192${fd(s.to)}\uff09`;
+      if(s.weekly) return `\u989d\u5b9a\u6bcf\u5468\u5de5\u4f5c\u65f6\u95f4\uff1a${secToHM(s.weekly)}`;
+      return `\u989d\u5b9a\u6bcf\u5468\u5de5\u4f5c\u65f6\u95f4\uff1a${secToHM(weeklyRated(e.id,lastDk))}`;
+    }).join('\n'); })();
   const head=ctLine? [e.name,'',ctLine,''] : [e.name,''];
   return head.concat([
-    `\u989d\u5b9a\u6bcf\u5468\u5de5\u4f5c\u65f6\u95f4\uff1a${secToHM(weeklyRated(e.id,lastDk))}`,'',
+    ratedLine,'',
     `\u5b9e\u9645\u603b\u5de5\u4f5c\u65f6\u95f4\uff1a${hSec(tn)}`,'',
     `\u5b9e\u9645\u603b\u52a0\u73ed\u65f6\u95f4\uff08\u5df2\u5305\u542b\u5728\u603b\u5de5\u4f5c\u65f6\u95f4\u4e4b\u5185\uff09\uff1a${hSec(to)}`,'',
     `\u63d0\u4f9b\u9910\u98df\u6570\uff1a${meals}`]);
