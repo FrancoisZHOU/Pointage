@@ -375,7 +375,7 @@ const I18N = {
 function t(k){ return (I18N[DATA.lang]||I18N.fr)[k]; }
 
 // ---------- DATA MODEL ----------
-const APP_VER='v41';
+const APP_VER='v42';
 const STORE_KEY = 'pointage_data_v1';
 let DATA = null;
 
@@ -645,6 +645,7 @@ function scheduleFor(e, dKey){
     const f = v.from || '0000-00-00';
     if(f <= dKey){ if(!best || f > (best.from||'0000-00-00')) best=v; }
   });
+  if(best && best.to && dKey > best.to) return {}; // v42: 模板止日已过 → 不再铺班
   if(!best){
     best = e.scheduleVersions.slice().sort((a,b)=>(a.from||'0000-00-00').localeCompare(b.from||'0000-00-00'))[0];
   }
@@ -2084,9 +2085,41 @@ function parseSchedLines(txt){
 }
 let obPending=null;
 function parseOpsLines(txt){
-  const ops={archives:[], restores:[], notes:[], temps:[]};
+  const ops={archives:[], restores:[], notes:[], temps:[], templates:[]};
+  const timeR=/(\d{1,2})\s*[hH:.](\d{2})?\s*(?:[\u2013\u2014\-~]|\u00e0)\s*(\d{1,2})\s*[hH:.](\d{2})?/g;
+  const DAYMAP={'\u65e5':0,'\u5929':0,'\u4e00':1,'\u4e8c':2,'\u4e09':3,'\u56db':4,'\u4e94':5,'\u516d':6};
   txt.split(/\n+/).forEach(line=>{
     line=line.trim(); if(!line) return;
+    if(line.startsWith('#\u6a21\u677f')){
+      const parts=line.slice(3).trim().split(/\s+/);
+      const nameToks=[];
+      while(parts.length && !/^\d{4}-\d{2}-\d{2}$/.test(parts[0])) nameToks.push(parts.shift());
+      const name=nameToks.join(' ');
+      const from=parts.shift();
+      if(!name||!from) return;
+      let to=null;
+      if(parts.length && /^\d{4}-\d{2}-\d{2}$/.test(parts[0])) to=parts.shift();
+      const rest=parts.join(' ');
+      if(rest.includes('\u505c')){ ops.templates.push({name, from, to, stop:true}); return; }
+      // 按 周X 分组,组内 1-2 个时段
+      const schedule={0:null,1:null,2:null,3:null,4:null,5:null,6:null};
+      const segs=rest.split(/(?=\u5468[\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u65e5\u5929])/);
+      let got=false;
+      segs.forEach(sg=>{
+        sg=sg.trim(); if(!sg.startsWith('\u5468')) return;
+        const d=DAYMAP[sg[1]]; if(d===undefined) return;
+        const ranges=[]; let m; timeR.lastIndex=0;
+        while((m=timeR.exec(sg))!==null){
+          ranges.push([pad(+m[1])+':'+(m[2]||'00'), pad(+m[3])+':'+(m[4]||'00')]);
+        }
+        if(!ranges.length) return;
+        const day={am:null,pm:null};
+        if(ranges.length===1){ const b=toSec(ranges[0][0])<15*3600?'am':'pm'; day[b]=ranges[0]; }
+        else { ranges.sort((a,b)=>toSec(a[0])-toSec(b[0])); day.am=ranges[0]; day.pm=ranges[1]; }
+        schedule[d]=day; got=true;
+      });
+      if(got) ops.templates.push({name, from, to, stop:false, schedule});
+      return; }
     if(line.startsWith('#\u5f52\u6863')){ const nm=line.slice(3).trim(); if(nm) ops.archives.push(nm); return; }
     if(line.startsWith('#\u6062\u590d')){ const nm=line.slice(3).trim(); if(nm) ops.restores.push(nm); return; }
     if(line.startsWith('#\u8bf4\u660e')){
@@ -2149,7 +2182,18 @@ function obApply(contracts, scheds, ops, newList){
     if(!DATA.frontExtra || DATA.frontExtra.date!==tp.dk) DATA.frontExtra={date:tp.dk, ids:[]};
     if(!DATA.frontExtra.ids.includes(le.id)){ DATA.frontExtra.ids.push(le.id); tN++; }
   });
-  return {created, cN, sN, xN, aN, nN, tN};
+  let mN=0;
+  ops.templates.forEach(tp=>{
+    const le=findE(tp.name); if(!le) return;
+    const v={from:tp.from, schedule: tp.stop? {0:null,1:null,2:null,3:null,4:null,5:null,6:null} : tp.schedule};
+    if(tp.to) v.to=tp.to;
+    if(!le.scheduleVersions) le.scheduleVersions=[];
+    const same=le.scheduleVersions.find(x=>(x.from||null)===(tp.from||null));
+    if(same){ same.schedule=v.schedule; if(tp.to) same.to=tp.to; else delete same.to; }
+    else le.scheduleVersions.push(v);
+    sortVersions(le); mN++;
+  });
+  return {created, cN, sN, xN, aN, nN, tN, mN};
 }
 function applyContractPaste(){
   const ta=document.getElementById('ct-ta'); if(!ta) return;
@@ -2157,16 +2201,17 @@ function applyContractPaste(){
   const contracts=parseContractLines(txt);
   const scheds=parseSchedLines(txt);
   const ops=parseOpsLines(txt);
-  if(!contracts.length && !scheds.length && !ops.archives.length && !ops.restores.length && !ops.notes.length && !ops.temps.length){
-    alert('\u2715 #\u5408\u540c \u59d3\u540d CDD 2026-08-20 2026-08-27 2h\n#\u6392\u73ed \u59d3\u540d 2026-08-20 18:30-19:30\n#\u6392\u73ed \u59d3\u540d 2026-08-29 \u53d6\u6d88\n#\u5f52\u6863 \u59d3\u540d \u00b7 #\u6062\u590d \u59d3\u540d\n#\u8bf4\u660e 2026-08-24 \u6587\u672c\n#\u4e34\u65f6 \u59d3\u540d'); return; }
+  if(!contracts.length && !scheds.length && !ops.archives.length && !ops.restores.length && !ops.notes.length && !ops.temps.length && !ops.templates.length){
+    alert('\u2715 #\u5408\u540c \u59d3\u540d CDD 2026-08-20 2026-08-27 2h\n#\u6392\u73ed \u59d3\u540d 2026-08-20 18:30-19:30\n#\u6392\u73ed \u59d3\u540d 2026-08-29 \u53d6\u6d88\n#\u5f52\u6863 \u59d3\u540d \u00b7 #\u6062\u590d \u59d3\u540d\n#\u8bf4\u660e 2026-08-24 \u6587\u672c\n#\u4e34\u65f6 \u59d3\u540d\n#\u6a21\u677f \u59d3\u540d 2026-09-07 [2026-11-30] \u5468\u4e8c 18:00-20:30 \u2026'); return; }
   // 分类: 现有(全名精确) vs 新建 vs 仅运维指令但查无此人(\u26a0不建新人)
   const names={};
-  const touch=(nm,kind)=>{ const k=nm; if(!names[k]) names[k]={c:0,s:0,x:0,a:'',tmp:0}; if(kind==='a'||kind==='r') names[k].a=kind; else names[k][kind]++; };
+  const touch=(nm,kind)=>{ const k=nm; if(!names[k]) names[k]={c:0,s:0,x:0,a:'',tmp:0,m:0}; if(kind==='a'||kind==='r') names[k].a=kind; else names[k][kind]++; };
   contracts.forEach(r=>touch(r.name,'c'));
   scheds.forEach(r=>touch(r.name, r.cancel?'x':'s'));
   ops.archives.forEach(nm=>touch(nm,'a'));
   ops.restores.forEach(nm=>touch(nm,'r'));
   ops.temps.forEach(tp=>touch(tp.name,'tmp'));
+  ops.templates.forEach(tp=>touch(tp.name,'m'));
   const newList=[], updList=[], errList=[];
   const segTag=(le, rs)=>{ if(!rs.length) return '';
     return ' '+rs.map(r=>{
@@ -2190,6 +2235,7 @@ function applyContractPaste(){
     if(info.a==='a') bits.push('\ud83d\uddc4\u5f52\u6863');
     if(info.a==='r') bits.push('\u21a9\u6062\u590d');
     if(info.tmp) bits.push('\u2795\u4e34\u65f6');
+    if(info.m) bits.push('\ud83d\udcc5\u6a21\u677f'+info.m);
     const tag=bits.join(' \u00b7 ');
     if(le){ updList.push({nm, tag, le}); }
     else if(info.c||info.s){ newList.push({nm, tag, le}); }
@@ -2225,6 +2271,7 @@ function obConfirm(){
   if(r.aN) parts.push('\u5f52\u6863/\u6062\u590d'+r.aN);
   if(r.nN) parts.push('\u8bf4\u660e'+r.nN);
   if(r.tN) parts.push('\u4e34\u65f6'+r.tN);
+  if(r.mN) parts.push('\u6a21\u677f'+r.mN);
   alert(parts.join(' \u00b7 '));
 }
 function _applyContractPasteOld(){
