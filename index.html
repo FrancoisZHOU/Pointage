@@ -252,7 +252,7 @@ const I18N = {
     edit:'Modifier', backfill:'Saisir manuellement', delete:'Supprimer', save:'Enregistrer',
     cancel:'Annuler', contract:'Planning', override:'Exception', start:'Début', end:'Fin',
     addPause:'+ Pause', monthExport:'Exporter le mois', monthTable:'Tableau mensuel',
-    totalOt:'Total temps suppl.', daysWorked:'Jours travaillés', totalWorked:'Total travaillé',
+    totalOt:'Total temps suppl.', monthTotalT:'Total du mois \u2014 tout le personnel', inclArchived:'dont archiv\u00e9s', daysWorked:'Jours travaillés', totalWorked:'Total travaillé',
     schedule:'Planning hebdomadaire', editSchedule:'Modifier le planning', addEmp:'Ajouter un employé',
     name:'Nom', weeklyTotal:'Total hebdo', changePin:'Changer le code', oldPin:'Code actuel',
     newPin:'Nouveau code', confirmPin:'Confirmer', backup:'Sauvegarde', exportData:'Exporter les données',
@@ -294,7 +294,7 @@ const I18N = {
     edit:'Edit', backfill:'Enter manually', delete:'Delete', save:'Save',
     cancel:'Cancel', contract:'Schedule', override:'Override', start:'Start', end:'End',
     addPause:'+ Break', monthExport:'Export month', monthTable:'Monthly table',
-    totalOt:'Total overtime', daysWorked:'Days worked', totalWorked:'Total worked',
+    totalOt:'Total overtime', monthTotalT:'Month total \u2014 all staff', inclArchived:'incl. archived', daysWorked:'Days worked', totalWorked:'Total worked',
     schedule:'Weekly schedule', editSchedule:'Edit schedule', addEmp:'Add employee',
     name:'Name', weeklyTotal:'Weekly total', changePin:'Change code', oldPin:'Current code',
     newPin:'New code', confirmPin:'Confirm', backup:'Backup', exportData:'Export data',
@@ -336,7 +336,7 @@ const I18N = {
     edit:'修改', backfill:'手动补录', delete:'删除', save:'保存',
     cancel:'取消', contract:'排班', override:'临时调整', start:'开始', end:'结束',
     addPause:'+ 暂停', monthExport:'导出当月', monthTable:'月度表格',
-    totalOt:'本月总加班', daysWorked:'出勤天数', totalWorked:'本月总工时',
+    totalOt:'本月总加班', monthTotalT:'本月合计 \u2014 全员', inclArchived:'含已归档', daysWorked:'出勤天数', totalWorked:'本月总工时',
     schedule:'每周排班', editSchedule:'修改排班', addEmp:'添加员工',
     name:'姓名', weeklyTotal:'每周合计', changePin:'修改密码', oldPin:'当前密码',
     newPin:'新密码', confirmPin:'确认密码', backup:'数据备份', exportData:'导出数据',
@@ -375,7 +375,7 @@ const I18N = {
 function t(k){ return (I18N[DATA.lang]||I18N.fr)[k]; }
 
 // ---------- DATA MODEL ----------
-const APP_VER='v42';
+const APP_VER='v43';
 const STORE_KEY = 'pointage_data_v1';
 let DATA = null;
 
@@ -2539,6 +2539,17 @@ function delEmp(empId){
 
 // ---------- SETTINGS TAB ----------
 let expYM = todayKey().slice(0,7);
+function monthTotals(ym){ // 当月全员统计(含归档者)
+  const rows=[]; let net=0, ot=0, meals=0, days=0;
+  DATA.employees.forEach(e=>{
+    let eo=0, en=0, ed=0, em=0;
+    Object.keys(DATA.records).forEach(dk=>{ if(dk.slice(0,7)!==ym) return; if(!DATA.records[dk][e.id]) return;
+      const n=dayNetWorked(e.id,dk); if(n>0){ ed++; en+=n; eo+=dayOvertime(e.id,dk).total; em+=dayMeals(e.id,dk); } });
+    rows.push({e, net:en, ot:eo, days:ed, meals:em});
+    net+=en; ot+=eo; meals+=em; days+=ed;
+  });
+  return {rows, net, ot, meals, days};
+}
 function renderSettings(b){
   const L=I18N[DATA.lang];
   // build month options from records + current
@@ -2547,14 +2558,19 @@ function renderSettings(b){
   const mopts=[...months].sort().reverse().map(ym=>{ const [y,m]=ym.split('-'); return `<option value="${ym}" ${expYM===ym?'selected':''}>${L.months[+m-1]} ${y}</option>`; }).join('');
   // monthly stats per employee
   let statHtml='';
-  DATA.employees.filter(e=>!e.archived).forEach(e=>{
-    let ot=0, net=0, days=0, meals=0;
-    Object.keys(DATA.records).forEach(dk=>{ if(dk.slice(0,7)!==expYM) return; if(!DATA.records[dk][e.id]) return;
-      const n=dayNetWorked(e.id,dk); if(n>0){ days++; net+=n; ot+=dayOvertime(e.id,dk).total; meals+=dayMeals(e.id,dk); } });
+  const tot=monthTotals(expYM);
+  tot.rows.filter(r=>!r.e.archived).forEach(r=>{
+    const e=r.e;
     statHtml+=`<div class="stat clickable" onclick="openEmpMonth('${e.id}')"><div class="sl">${e.name}</div>
-      <div class="sv tnum">${secToHM(net)} <small>· ${t('overtime')} ${secToHM(ot)}</small></div>
-      <div class="sl" style="margin-top:6px">${t('daysWorked')}: ${days} · ${t('meals')}: ${meals}</div></div>`;
+      <div class="sv tnum">${secToHM(r.net)} <small>· ${t('overtime')} ${secToHM(r.ot)}</small></div>
+      <div class="sl" style="margin-top:6px">${t('daysWorked')}: ${r.days} · ${t('meals')}: ${r.meals}</div></div>`;
   });
+  // v43: 全员合计卡(含归档者,成本口径)
+  const arch=tot.rows.filter(r=>r.e.archived && r.net>0);
+  const archTxt=arch.length? ` \u00b7 ${t('inclArchived')} ${arch.length}\u4eba ${secToHM(arch.reduce((a,r)=>a+r.net,0))}` : '';
+  statHtml+=`<div class="stat" style="grid-column:1/-1;border:1px solid var(--line)"><div class="sl">\u03a3 ${t('monthTotalT')}</div>
+      <div class="sv tnum">${secToHM(tot.net)} <small>\u00b7 ${t('overtime')} ${secToHM(tot.ot)}</small></div>
+      <div class="sl" style="margin-top:6px">${t('meals')}: ${tot.meals}${archTxt}</div></div>`;
   const empBtns = DATA.employees.filter(e=>{
     if(e.archived) return false;
     for(let d=1;d<=31;d++){ if(dayNetWorked(e.id, expYM+'-'+pad(d))>0) return true; } return false;
