@@ -375,7 +375,7 @@ const I18N = {
 function t(k){ return (I18N[DATA.lang]||I18N.fr)[k]; }
 
 // ---------- DATA MODEL ----------
-const APP_VER='v43';
+const APP_VER='v43b';
 const STORE_KEY = 'pointage_data_v1';
 let DATA = null;
 
@@ -570,7 +570,7 @@ async function drvUpload(force){
       DCFG.last=Date.now(); dcfgSave();
       drvStatus(t('drvPushed')+' '+new Date(DCFG.last).toTimeString().slice(0,5)); }
     else drvStatus(t('drvUpFail')+' '+r.status,1);
-  }catch(e){ drvStatus(t('drvNetRetry'),1); }
+  }catch(e){ drvStatus(t('drvNetRetry')+' \u00b7 '+(e&&(e.name+': '+e.message)||e),1); }
   driveBusy=false;
 }
 async function drvPull(manual){
@@ -589,15 +589,21 @@ async function drvPull(manual){
     if(r.status===404){ DCFG.fileId=null; dcfgSave(); drvStatus(t('drvNoFile'),1); driveBusy=false; return; }
     if(!r.ok){ drvStatus(t('drvUpFail')+' '+r.status,1); driveBusy=false; return; }
     const txt=await r.text();
-    const obj=JSON.parse(txt);
+    let obj; try{ obj=JSON.parse(txt); }catch(e){ drvStatus('\u2715 \u4e91\u7aef\u6587\u4ef6\u4e0d\u662f\u6709\u6548JSON ('+txt.length+'B): '+txt.slice(0,60),1); driveBusy=false; return; }
+    if(!obj||!Array.isArray(obj.employees)){ drvStatus('\u2715 \u4e91\u7aef\u6587\u4ef6\u7ed3\u6784\u5f02\u5e38',1); driveBusy=false; return; }
     // 规范化: 云端数据过同一套migrate再比对, 防"旧结构文件→覆盖→补字段→再覆盖"死循环
     const keep=DATA; let canon;
-    try{ DATA=obj; migrate(); canon=JSON.stringify(DATA); } finally { DATA=keep; }
+    try{ DATA=obj; migrate(); canon=JSON.stringify(DATA); }
+    catch(e){ DATA=keep; drvStatus('\u2715 \u6570\u636e\u8fc1\u79fb\u5931\u8d25: '+(e&&e.message||e),1); driveBusy=false; return; }
+    finally { DATA=keep; }
     const cur=localStorage.getItem(STORE_KEY);
     DCFG.last=Date.now(); dcfgSave();
-    if(canon!==cur){ localStorage.setItem(STORE_KEY, canon); driveBusy=false; drvReload(); return; }
+    if(canon!==cur){
+      try{ localStorage.setItem(STORE_KEY, canon); }
+      catch(e){ drvStatus('\u2715 \u672c\u673a\u5b58\u50a8\u5199\u5165\u5931\u8d25('+Math.round(canon.length/1024)+'KB): '+(e&&e.name||e),1); driveBusy=false; return; }
+      driveBusy=false; drvReload(); return; }
     drvStatus(t('drvPulled')+' '+new Date(DCFG.last).toTimeString().slice(0,5));
-  }catch(e){ drvStatus(t('drvNetRetry'),1); }
+  }catch(e){ drvStatus(t('drvNetRetry')+' \u00b7 '+(e&&(e.name+': '+e.message)||e),1); }
   driveBusy=false;
 }
 function drvReload(){ location.reload(); }
