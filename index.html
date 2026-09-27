@@ -375,7 +375,7 @@ const I18N = {
 function t(k){ return (I18N[DATA.lang]||I18N.fr)[k]; }
 
 // ---------- DATA MODEL ----------
-const APP_VER='v43b';
+const APP_VER='v44';
 const STORE_KEY = 'pointage_data_v1';
 let DATA = null;
 
@@ -513,7 +513,15 @@ const DCFG_KEY='pointage_drive_v1';
 let DCFG={mode:null,fileId:null,last:null};
 try{ const _x=localStorage.getItem(DCFG_KEY); if(_x) DCFG=JSON.parse(_x); }catch(e){}
 function dcfgSave(){ try{ localStorage.setItem(DCFG_KEY, JSON.stringify(DCFG)); }catch(e){} }
-let driveToken=null, driveTokenClient=null, driveBusy=false, drvPushTimer=null, drvLastPull=0;
+let driveToken=null, driveTokenClient=null, driveBusy=false, drvPushTimer=null, drvLastPull=0, drvAuthAt=0;
+// v44: token 缓存(存 DCFG.tok/exp, 1h 有效) + 单飞锁 + 账号提示(DCFG.hint, 经 drive about 接口取得, 不扩 scope)
+function drvTokValid(){ return !!(DCFG.tok && DCFG.exp && Date.now() < DCFG.exp); }
+function drvClearTok(){ driveToken=null; DCFG.tok=null; DCFG.exp=null; dcfgSave(); }
+function drvAfterAuth(){ if(DCFG.mode==='push') drvUpload(true); else if(DCFG.mode==='pull') drvPull(); }
+async function drvFetchHint(){ // 后台取授权账号邮箱作 hint; 失败静默
+  try{ const r=await fetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)',{headers:{Authorization:'Bearer '+driveToken}});
+    if(r.ok){ const j=await r.json(); const em=j&&j.user&&j.user.emailAddress; if(em&&em!==DCFG.hint){ DCFG.hint=em; dcfgSave(); } } }catch(e){}
+}
 function drvStatus(txt,bad){ const el=document.getElementById('drv-status'); if(el){ el.textContent=txt; el.style.color=bad?'var(--wine)':''; } }
 function drvLoadGIS(cb){
   if(window.google&&window.google.accounts){cb();return;}
@@ -523,18 +531,27 @@ function drvLoadGIS(cb){
   document.head.appendChild(sc);
 }
 function drvInit(interactive){
+  try{ // v44 fail-open: 此块任何异常 → 退回原路径
+    if(!interactive && drvTokValid()){ driveToken=DCFG.tok; drvStatus(t('drvConnected')); drvAfterAuth(); return; }
+    if(!interactive && drvAuthAt && Date.now()-drvAuthAt<20000) return; // 单飞锁
+  }catch(e){}
+  drvAuthAt=Date.now();
   drvLoadGIS(()=>{ try{
     if(!driveTokenClient) driveTokenClient=google.accounts.oauth2.initTokenClient({
       client_id:DRIVE_CLIENT_ID,
       scope:'https://www.googleapis.com/auth/drive.file',
       callback:resp=>{
+        drvAuthAt=0;
         if(resp&&resp.access_token){ driveToken=resp.access_token;
+          try{ DCFG.tok=resp.access_token; DCFG.exp=Date.now()+(((+resp.expires_in)||3600)-60)*1000; dcfgSave(); }catch(e){}
           drvStatus(t('drvConnected'));
-          if(DCFG.mode==='push') drvUpload(true);
-          else if(DCFG.mode==='pull') drvPull();
+          drvAfterAuth();
+          drvFetchHint();
         } else drvStatus(t('drvNoAuth'),1);
       }});
-    driveTokenClient.requestAccessToken({prompt:interactive?'consent':''});
+    const req={prompt:interactive?'consent':''};
+    if(!interactive && DCFG.hint) req.hint=DCFG.hint;
+    driveTokenClient.requestAccessToken(req);
   }catch(e){ drvStatus(t('drvInitFail'),1); } });
 }
 async function drvFindFileId(){
@@ -547,11 +564,12 @@ async function drvFindFileId(){
 async function drvUpload(force){
   if(DCFG.mode!=='push'||!driveToken||driveBusy) return;
   driveBusy=true;
+  if(DCFG.exp && Date.now()>=DCFG.exp){ drvClearTok(); driveBusy=false; drvInit(false); return; }
   try{
     const json=JSON.stringify(DATA);
     if(!DCFG.fileId){
       const fid=await drvFindFileId();
-      if(fid===401){ driveToken=null; driveBusy=false; drvInit(false); return; }
+      if(fid===401){ drvClearTok(); driveBusy=false; drvInit(false); return; }
       if(fid){ DCFG.fileId=fid; dcfgSave(); }
     }
     const meta={name:DRIVE_FILE_NAME, mimeType:'application/json'};
@@ -564,7 +582,7 @@ async function drvUpload(force){
       :'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
     const r=await fetch(url,{method:DCFG.fileId?'PATCH':'POST',
       headers:{Authorization:'Bearer '+driveToken,'Content-Type':'multipart/related; boundary='+boundary}, body:body});
-    if(r.status===401){ driveToken=null; drvInit(false); }
+    if(r.status===401){ drvClearTok(); drvInit(false); }
     else if(r.status===404 && DCFG.fileId){ DCFG.fileId=null; dcfgSave(); driveBusy=false; drvUpload(true); return; }
     else if(r.ok){ const j=await r.json(); if(j.id){ DCFG.fileId=j.id; }
       DCFG.last=Date.now(); dcfgSave();
@@ -576,16 +594,17 @@ async function drvUpload(force){
 async function drvPull(manual){
   if(DCFG.mode!=='pull'||!driveToken||driveBusy) return;
   driveBusy=true;
+  if(DCFG.exp && Date.now()>=DCFG.exp){ drvClearTok(); driveBusy=false; drvInit(false); return; }
   try{
     if(!DCFG.fileId){
       const fid=await drvFindFileId();
-      if(fid===401){ driveToken=null; driveBusy=false; drvInit(false); return; }
+      if(fid===401){ drvClearTok(); driveBusy=false; drvInit(false); return; }
       if(!fid){ drvStatus(t('drvNoFile'),1); driveBusy=false; return; }
       DCFG.fileId=fid; dcfgSave();
     }
     const r=await fetch('https://www.googleapis.com/drive/v3/files/'+DCFG.fileId+'?alt=media',
       {headers:{Authorization:'Bearer '+driveToken}});
-    if(r.status===401){ driveToken=null; driveBusy=false; drvInit(false); return; }
+    if(r.status===401){ drvClearTok(); driveBusy=false; drvInit(false); return; }
     if(r.status===404){ DCFG.fileId=null; dcfgSave(); drvStatus(t('drvNoFile'),1); driveBusy=false; return; }
     if(!r.ok){ drvStatus(t('drvUpFail')+' '+r.status,1); driveBusy=false; return; }
     const txt=await r.text();
@@ -619,7 +638,7 @@ function drvEnable(mode){
 }
 function drvDisable(){
   if(!confirm(t('drvOffConfirm'))) return;
-  DCFG.mode=null; dcfgSave(); driveToken=null;
+  DCFG.mode=null; DCFG.tok=null; DCFG.exp=null; DCFG.hint=null; dcfgSave(); driveToken=null;
   renderTab();
 }
 document.addEventListener('visibilitychange',()=>{
