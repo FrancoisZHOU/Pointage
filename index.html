@@ -375,7 +375,7 @@ const I18N = {
 function t(k){ return (I18N[DATA.lang]||I18N.fr)[k]; }
 
 // ---------- DATA MODEL ----------
-const APP_VER='v44';
+const APP_VER='v45';
 const STORE_KEY = 'pointage_data_v1';
 let DATA = null;
 
@@ -2811,7 +2811,7 @@ function buildSheetXml(emps, daysInMonth, monthName, includeMeals, y, m){
     r2+=`<c r="${C(i,1)}2" t="inlineStr" s="2"><is><t>Jour</t></is></c>`;
     r2+=`<c r="${C(i,2)}2" t="inlineStr" s="2"><is><t>Horaires</t></is></c>`;
     r2+=`<c r="${C(i,3)}2" t="inlineStr" s="2"><is><t>Net</t></is></c>`;
-    r2+=`<c r="${C(i,4)}2" t="inlineStr" s="2"><is><t>Temps suppl\u00e9mentaire effectu\u00e9</t></is></c>`; });
+    r2+=`<c r="${C(i,4)}2" t="inlineStr" s="2"><is><t>Temps suppl\u00e9mentaire effectu\u00e9 (inclus dans le Net)</t></is></c>`; });
   r2+=`</row>`; rows.push(r2);
   for(let d=1;d<=daysInMonth;d++){ const rr=d+2;
     const dow=new Date(y, m-1, d).getDay();
@@ -2842,6 +2842,12 @@ function buildSheetXml(emps, daysInMonth, monthName, includeMeals, y, m){
     emps.forEach((e,i)=>{
       mealRow+=`<c r="${C(i,1)}${mr}" t="inlineStr" s="5"><is><t>Repas</t></is></c><c r="${C(i,2)}${mr}" s="5"><v>${e.meals||0}</v></c>`; });
     mealRow+=`</row>`; rows.push(mealRow); lastRow=mr;
+  }
+  { // v45: 加班已含于 Net 的说明行(每人块一条)
+    const nr=lastRow+1; let noteRow=`<row r="${nr}" ht="18" customHeight="1">`;
+    emps.forEach((e,i)=>{
+      noteRow+=`<c r="${C(i,1)}${nr}" t="inlineStr" s="3"><is><t>Le temps suppl\u00e9mentaire est d\u00e9j\u00e0 compris dans le Net \u2014 ne pas l\u2019additionner.</t></is></c>`; });
+    noteRow+=`</row>`; rows.push(noteRow); lastRow=nr;
   }
   let cols='<cols>';
   emps.forEach((e,i)=>{ const n=i*4;
@@ -2944,7 +2950,7 @@ function acctEmpBlock(e, y, m, daysInMonth, lastDk){
   return head.concat([
     ratedLine,'',
     `\u5b9e\u9645\u603b\u5de5\u4f5c\u65f6\u95f4\uff1a${hSec(tn)}`,'',
-    `\u5b9e\u9645\u603b\u52a0\u73ed\u65f6\u95f4\uff08\u5df2\u5305\u542b\u5728\u603b\u5de5\u4f5c\u65f6\u95f4\u4e4b\u5185\uff09\uff1a${hSec(to)}`,'',
+    `\u5b9e\u9645\u603b\u52a0\u73ed\u65f6\u95f4\uff08\u5df2\u5305\u542b\u5728\u4e0a\u9762\u7684\u603b\u5de5\u4f5c\u65f6\u95f4\u5185\uff0c\u52ff\u53e0\u52a0\uff09\uff1a${hSec(to)}`,'',
     `\u63d0\u4f9b\u9910\u98df\u6570\uff1a${meals}`]);
 }
 async function shareAcctEmp(empId){
