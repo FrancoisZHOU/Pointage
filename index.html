@@ -375,7 +375,7 @@ const I18N = {
 function t(k){ return (I18N[DATA.lang]||I18N.fr)[k]; }
 
 // ---------- DATA MODEL ----------
-const APP_VER='v45';
+const APP_VER='v46';
 const STORE_KEY = 'pointage_data_v1';
 let DATA = null;
 
@@ -746,13 +746,17 @@ function dayNetWorked(empId, dKey){
   return rec.shifts.reduce((a,sh)=>a+shiftNet(sh),0);
 }
 // repas: 1 par segment travaillé (matin/soir), max 2/jour — basé sur les pointages réels
+// v46: 餐数只在实际工作时段与饭点窗口重叠时才计(周日 9h-10h 清洁班不跨饭点 → 0 餐)
+const MEAL_WIN={am:[11*3600,15*3600], pm:[17*3600,23*3600]};
 function dayMeals(empId, dKey){
   const rec = DATA.records[dKey] && DATA.records[dKey][empId];
   if(!rec || !rec.shifts || !rec.shifts.length) return 0;
-  const contract = getContract(empId, dKey);
-  const netB={am:0,pm:0};
-  rec.shifts.forEach(sh=>{ netB[assignBucket(sh,contract)] += shiftNet(sh); });
-  return (netB.am>0?1:0) + (netB.pm>0?1:0);
+  let am=false, pm=false;
+  rec.shifts.forEach(sh=>{ if(!sh.start||!sh.end) return;
+    shiftSegments(sh).forEach(([a,b])=>{ if(!a||!b) return; const s=toSec(a), e=toSec(b); if(e<=s) return;
+      if(s<MEAL_WIN.am[1] && e>MEAL_WIN.am[0]) am=true;
+      if(s<MEAL_WIN.pm[1] && e>MEAL_WIN.pm[0]) pm=true; }); });
+  return (am?1:0)+(pm?1:0);
 }
 // worked segments of a shift (split by pauses) → [[start,end],...]
 function shiftSegments(sh){
