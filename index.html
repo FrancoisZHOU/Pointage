@@ -375,7 +375,7 @@ const I18N = {
 function t(k){ return (I18N[DATA.lang]||I18N.fr)[k]; }
 
 // ---------- DATA MODEL ----------
-const APP_VER='v46';
+const APP_VER='v47';
 const STORE_KEY = 'pointage_data_v1';
 let DATA = null;
 
@@ -488,6 +488,7 @@ function migrate(){
   if(!DATA.overReasons) DATA.overReasons={};
   if(!DATA.demandOv) DATA.demandOv={};
   if(!DATA.frontExtra) DATA.frontExtra={date:null, ids:[]};
+  if(!DATA.frontPlan) DATA.frontPlan={}; // v47: 预约的临时打卡人 {日期:[ids]}
   if(!DATA.planHide) DATA.planHide=[];
   if(DATA && DATA.employees) DATA.employees.forEach(migrateEmp);
   // v38: 合同单条 → 分段列表 contracts[]
@@ -828,12 +829,14 @@ function frontVisible(e){
   const rec=DATA.records[today]&&DATA.records[today][e.id];
   if(rec&&rec.shifts&&rec.shifts.length) return true;           // 今天已打过卡
   if(DATA.frontExtra && DATA.frontExtra.date===today && DATA.frontExtra.ids.includes(e.id)) return true; // 后台临时添加
+  if(DATA.frontPlan && DATA.frontPlan[today] && DATA.frontPlan[today].includes(e.id)) return true; // v47: 预约临时
   return false;
 }
 function renderEmpCards(){
   const wrap=document.getElementById('emp-cards');
   wrap.innerHTML='';
   if(DATA.frontExtra && DATA.frontExtra.date && DATA.frontExtra.date!==todayKey()){ DATA.frontExtra={date:null, ids:[]}; save(); } // 凌晨翻篇清空
+  if(DATA.frontPlan){ const tk=todayKey(); let ch=false; Object.keys(DATA.frontPlan).forEach(k=>{ if(k<tk){ delete DATA.frontPlan[k]; ch=true; } }); if(ch) save(); }
   DATA.employees.filter(e=>frontVisible(e)).forEach(e=>{
     const st=liveState(e.id);
     const card=document.createElement('div');
@@ -1806,6 +1809,7 @@ function frontExtraPick(id){
 }
 function frontExtraDel(id){
   if(DATA.frontExtra) DATA.frontExtra.ids=DATA.frontExtra.ids.filter(x=>x!==id);
+  if(DATA.frontPlan){ Object.keys(DATA.frontPlan).forEach(k=>{ DATA.frontPlan[k]=DATA.frontPlan[k].filter(x=>x!==id); if(!DATA.frontPlan[k].length) delete DATA.frontPlan[k]; }); }
   save(); renderEmpCards(); renderTab();
 }
 function renderRecords(b){
@@ -1815,7 +1819,7 @@ function renderRecords(b){
   let html=`<div class="day-nav"><button onclick="shiftDate(-7)">«</button><button onclick="shiftDate(-1)">‹</button><div class="dlabel serif" style="cursor:pointer" onclick="pickDate(v=>{recDate=v;renderTab();},recDate)">${dlabel}</div><button onclick="shiftDate(1)">›</button><button onclick="shiftDate(7)">»</button></div>`;
   if(recDate===todayKey()){
     const shown=DATA.employees.filter(e=>frontVisible(e)).map(e=>e.name).join(', ')||'\u2014';
-    const extras=(DATA.frontExtra&&DATA.frontExtra.date===recDate)?DATA.frontExtra.ids:[];
+    const extras=[...new Set([...((DATA.frontExtra&&DATA.frontExtra.date===recDate)?DATA.frontExtra.ids:[]), ...((DATA.frontPlan&&DATA.frontPlan[recDate])||[])])];
     const chips=extras.map(id=>{const e=emp(id); return e?`<button class="mini" onclick="frontExtraDel('${id}')">${e.name} \u2715</button>`:'';}).join('');
     html+=`<div class="note" style="padding:10px;margin-bottom:14px"><b>${t('frontToday')}</b>: ${shown}
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${chips}<button class="mini" onclick="frontExtraAdd()">${t('frontAddBtn')}</button></div></div>`;
@@ -2207,9 +2211,16 @@ function obApply(contracts, scheds, ops, newList){
   ops.notes.forEach(n=>{ DATA.overReasons[mondayOf(n.dk)]=n.text; nN++; });
   ops.temps.forEach(tp=>{
     const le=findE(tp.name); if(!le) return;
-    if(tp.dk!==todayKey()) return; // 临时添加仅限当天(凌晨自动翻篇)
-    if(!DATA.frontExtra || DATA.frontExtra.date!==tp.dk) DATA.frontExtra={date:tp.dk, ids:[]};
-    if(!DATA.frontExtra.ids.includes(le.id)){ DATA.frontExtra.ids.push(le.id); tN++; }
+    const tk=todayKey();
+    if(tp.dk<tk) return; // 过去日期忽略
+    if(tp.dk===tk){
+      if(!DATA.frontExtra || DATA.frontExtra.date!==tp.dk) DATA.frontExtra={date:tp.dk, ids:[]};
+      if(!DATA.frontExtra.ids.includes(le.id)){ DATA.frontExtra.ids.push(le.id); tN++; }
+    } else { // v47: 未来日期 → 预约,当天自动出现在前台,翻篇后自动清
+      if(!DATA.frontPlan) DATA.frontPlan={};
+      if(!DATA.frontPlan[tp.dk]) DATA.frontPlan[tp.dk]=[];
+      if(!DATA.frontPlan[tp.dk].includes(le.id)){ DATA.frontPlan[tp.dk].push(le.id); tN++; }
+    }
   });
   let mN=0;
   ops.templates.forEach(tp=>{
@@ -2231,7 +2242,7 @@ function applyContractPaste(){
   const scheds=parseSchedLines(txt);
   const ops=parseOpsLines(txt);
   if(!contracts.length && !scheds.length && !ops.archives.length && !ops.restores.length && !ops.notes.length && !ops.temps.length && !ops.templates.length){
-    alert('\u2715 #\u5408\u540c \u59d3\u540d CDD 2026-08-20 2026-08-27 2h\n#\u6392\u73ed \u59d3\u540d 2026-08-20 18:30-19:30\n#\u6392\u73ed \u59d3\u540d 2026-08-29 \u53d6\u6d88\n#\u5f52\u6863 \u59d3\u540d \u00b7 #\u6062\u590d \u59d3\u540d\n#\u8bf4\u660e 2026-08-24 \u6587\u672c\n#\u4e34\u65f6 \u59d3\u540d\n#\u6a21\u677f \u59d3\u540d 2026-09-07 [2026-11-30] \u5468\u4e8c 18:00-20:30 \u2026'); return; }
+    alert('\u2715 #\u5408\u540c \u59d3\u540d CDD 2026-08-20 2026-08-27 2h\n#\u6392\u73ed \u59d3\u540d 2026-08-20 18:30-19:30\n#\u6392\u73ed \u59d3\u540d 2026-08-29 \u53d6\u6d88\n#\u5f52\u6863 \u59d3\u540d \u00b7 #\u6062\u590d \u59d3\u540d\n#\u8bf4\u660e 2026-08-24 \u6587\u672c\n#\u4e34\u65f6 \u59d3\u540d [\u65e5\u671f]\n#\u6a21\u677f \u59d3\u540d 2026-09-07 [2026-11-30] \u5468\u4e8c 18:00-20:30 \u2026'); return; }
   // 分类: 现有(全名精确) vs 新建 vs 仅运维指令但查无此人(\u26a0不建新人)
   const names={};
   const touch=(nm,kind)=>{ const k=nm; if(!names[k]) names[k]={c:0,s:0,x:0,a:'',tmp:0,m:0}; if(kind==='a'||kind==='r') names[k].a=kind; else names[k][kind]++; };
@@ -2891,7 +2902,8 @@ function buildMonthEmp(e, y, m, daysInMonth){
 function exportMonth(){
   const [y,m]=expYM.split('-').map(Number);
   const daysInMonth=new Date(y,m,0).getDate();
-  const emps=DATA.employees.map(e=>buildMonthEmp(e,y,m,daysInMonth));
+  // v47: 只导当月有工时的人(含归档者),整月空白的不占列
+  const emps=DATA.employees.map(e=>buildMonthEmp(e,y,m,daysInMonth)).filter(x=>Object.keys(x.days).length>0);
   const monthName=I18N.fr.months[m-1]+' '+y;
   const bytes=makeXlsx(emps, daysInMonth, monthName, true, y, m);
   download(`Pointage_${expYM}.xlsx`, new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
