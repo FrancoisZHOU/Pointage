@@ -375,7 +375,7 @@ const I18N = {
 function t(k){ return (I18N[DATA.lang]||I18N.fr)[k]; }
 
 // ---------- DATA MODEL ----------
-const APP_VER='v48';
+const APP_VER='v48b';
 const STORE_KEY = 'pointage_data_v1';
 let DATA = null;
 
@@ -2481,12 +2481,12 @@ tr{page-break-inside:avoid}
 </style></head><body>
 <div class="bar"><button onclick="window.print()">\ud83d\udda8 Imprimer</button><button onclick="window.close()">Fermer</button></div>
 ${missing?`<div class="warn">\u26a0 ${missing} ligne(s) avec des mentions manquantes (pr\u00e9noms / sexe / naissance / nationalit\u00e9 / emploi / qualification) \u2014 compl\u00e9ter via #\u8eab\u4efd.</div>`:''}
-<h1>REGISTRE UNIQUE DU PERSONNEL</h1>
+<h1>REGISTRE UNIQUE DU PERSONNEL <span style="font-size:11px;font-weight:normal;color:#555">\u2013 ${rows.length} inscriptions</span></h1>
 <div class="hd">${REG_COMPANY.raison} \u2013 enseigne ${REG_COMPANY.enseigne} \u00b7 SIRET ${REG_COMPANY.siret} \u00b7 ${REG_COMPANY.adresse} \u00b7 ${REG_COMPANY.ccn}</div>
 <div class="law">Articles L.1221-13 \u00e0 L.1221-15 et D.1221-23 \u00e0 D.1221-27 du Code du travail \u2013 inscriptions dans l\u2019ordre d\u2019embauche ; chaque embauche fait l\u2019objet d\u2019une ligne. Les mentions sont conserv\u00e9es cinq ans \u00e0 compter du d\u00e9part du salari\u00e9.</div>
 <table><thead><tr><th>N\u00b0</th><th>Nom</th><th>Pr\u00e9noms</th><th>Sexe</th><th>Date de naissance</th><th>Nationalit\u00e9</th><th>Emploi</th><th>Qualification</th><th>Type de contrat</th><th>Date d\u2019entr\u00e9e</th><th>Date de sortie</th><th>\u00c9trangers : type et n\u00b0 du titre valant autorisation de travail</th></tr></thead>
 <tbody>${tr}</tbody></table>
-<div class="ft">Registre tenu sous forme \u00e9lectronique par le g\u00e9rant, M. ZHOU Yang \u2013 \u00e9dition du ${regFmt(today)}.${rows.length?` Premi\u00e8re embauche : ${regFmt(rows[0].entry)}.`:''}${note}</div>
+<div class="ft">Registre tenu sous forme \u00e9lectronique par le g\u00e9rant, M. ZHOU Yang \u2013 \u00e9dition du ${regFmt(today)} \u2013 <b>${rows.length} inscriptions</b>.${rows.length?` Premi\u00e8re embauche : ${regFmt(rows[0].entry)}.`:''}${note}</div>
 </body></html>`;
 }
 function openRegistre(){
@@ -2499,7 +2499,7 @@ function renderEmployees(b){
   if(!schedEmp && DATA.employees[0]) schedEmp=DATA.employees[0].id;
   const L=I18N[DATA.lang];
   let html=`<div class="emp-pick">${DATA.employees.filter(e=>!e.archived).map(e=>`<button class="${schedEmp===e.id?'active':''}" onclick="schedEmp='${e.id}';renderTab()">${e.name}${(()=>{const c=ctMain(e);const d=ctDays(e);if(d===null||!c||c.type!=='CDD')return '';if(d<0)return ' \ud83d\udd34';if(d<=3)return ' \ud83d\udd34';if(d<=7)return ' \ud83d\udfe1';return '';})()}</button>`).join('')}<button onclick="openAddEmp()">+ ${t('addEmp')}</button></div>`;
-  html+=`<div style="margin:0 0 12px"><button class="btn-sec" onclick="openRegistre()">\ud83d\udccb Registre du personnel</button></div>`;
+  html+=`<div style="margin:0 0 12px"><button class="btn-sec" onclick="openRegistre()">\ud83d\udccb Registre du personnel (${registreRows().length})</button></div>`;
   (function(){
     const roster=DATA.employees.filter(x=>!x.archived);
     const rows=roster.map(x=>{
